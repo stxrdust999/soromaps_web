@@ -1,6 +1,6 @@
 > ⚠️ **Duas tabelas.** As telas construídas já exigem cerca de vinte — o desenho
-> dessa estrutura vive em `docs/diagramas/modelo-de-dados/` (pasta local, fora
-> do controle de versão), e a distância até lá está em [09 — Backlog](./09-backlog.md).
+> dessa estrutura vive em `soromaps_api/docs/diagramas/modelo-de-dados/`
+> (versionado lá), e a distância até lá está em [09 — Backlog](./09-backlog.md).
 
 # 🐘 03. Banco
 

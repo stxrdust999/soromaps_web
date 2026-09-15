@@ -45,6 +45,6 @@ cada destino, porque link quebrado não preserva história nenhuma.
 |---|---|
 | Visão de produto | [`wiki/01-visao-geral.md`](../../wiki/01-visao-geral.md) — o produto de hoje, não o do papel |
 | Requisitos e casos de uso | `docs/diagramas/` — leitura do código atual (pasta local, fora do controle de versão) |
-| Modelo de dados de destino | `docs/diagramas/modelo-de-dados/` — as 20 tabelas que as telas de hoje exigem |
+| Modelo de dados de destino | `soromaps_api/docs/diagramas/modelo-de-dados/` — as 20 tabelas que as telas de hoje exigem |
 | Arquitetura e stack | [`wiki/02-arquitetura.md`](../../wiki/02-arquitetura.md) |
 | Por que cada tela é assim | [`docs/adr/`](../../adr/README.md) |
