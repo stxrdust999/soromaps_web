@@ -8,28 +8,21 @@ import { TableFooter } from "@/components/table/table-footer";
 import { TableHeaderTemplate } from "@/components/table/table-header-template";
 import { Table, TableBody, TableHeader } from "@/components/ui/table";
 import { useTableConfig } from "@/hooks/table/use-table-config";
-import type { getUsersResponse } from "@/http/users/users";
+import type { listUsersResponse } from "@/http/users/users";
 
 import { columns, defaultColumnVisibility } from "./columns";
 import { UserListTableToolbar } from "./toolbar";
 
 interface UsersTableProps {
   promises: {
-    usersPromise: Promise<getUsersResponse>;
+    usersPromise: Promise<listUsersResponse>;
   };
 }
 
-/**
- * Users table orchestrator — first client component in the tree. Wires
- * toolbar, body and footer without knowing columns, cell formatting or
- * pagination internals; those live in sibling or shared components.
- *
- * @param props Data promises consumed by the table body.
- */
 export function UsersTable({ promises }: UsersTableProps) {
   const usersResponse = use(promises.usersPromise);
   const users = useMemo(() => {
-    return usersResponse.status === 200 ? usersResponse.data : [];
+    return usersResponse.status === 200 ? usersResponse.data.items : [];
   }, [usersResponse]);
 
   const columnDef = useMemo(() => columns, []);
@@ -39,7 +32,7 @@ export function UsersTable({ promises }: UsersTableProps) {
     data: users,
     columns: columnDef,
     defaultVisibility,
-    defaultSorting: [{ id: "userName", desc: false }],
+    defaultSorting: [{ id: "name", desc: false }],
   });
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Table } from "@tanstack/react-table";
-import { ClockIcon, MailIcon, UserSearchIcon } from "lucide-react";
+import { ClockIcon, MailIcon, MapPinIcon, ShieldIcon, UserSearchIcon } from "lucide-react";
 import { useCallback } from "react";
 
 import { ColumnVisibilityFilter } from "@/components/table/column-visibility-filter";
@@ -18,22 +18,12 @@ interface UserListTableToolbarProps {
   table: Table<UserResource>;
 }
 
-/**
- * Table toolbar: one filter chip per filterable column (text inline, date
- * via calendar popover), reset button and column visibility. Each chip
- * binds straight to its column filter — no form, no sheet: expanding
- * reveals the control, collapsing clears that column's filter.
- *
- * A `SelectFilterChip` for "Tipo" joins the row once the user type field
- * exists (role/permission backlog item).
- *
- * @param props Table instance.
- */
 export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
-  const userNameColumn = table.getColumn("userName");
+  const nameColumn = table.getColumn("name");
   const emailColumn = table.getColumn("email");
+  const roleColumn = table.getColumn("role");
+  const neighborhoodColumn = table.getColumn("neighborhood");
   const createdAtColumn = table.getColumn("createdAt");
-  const updatedAtColumn = table.getColumn("updatedAt");
 
   const activeFilters = hasActiveFilters({ table });
 
@@ -45,12 +35,12 @@ export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
   return (
     <div className="flex items-start justify-between gap-3">
       <FilterChipsScrollArea>
-        {userNameColumn && (
+        {nameColumn && (
           <TextFilterChip
             table={table}
-            column={userNameColumn}
+            column={nameColumn}
             icon={<UserSearchIcon className="size-4" />}
-            label="Nome de usuário"
+            label="Nome"
           />
         )}
 
@@ -63,6 +53,24 @@ export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
           />
         )}
 
+        {roleColumn && (
+          <TextFilterChip
+            table={table}
+            column={roleColumn}
+            icon={<ShieldIcon className="size-4" />}
+            label={userColumnsNames.role}
+          />
+        )}
+
+        {neighborhoodColumn && (
+          <TextFilterChip
+            table={table}
+            column={neighborhoodColumn}
+            icon={<MapPinIcon className="size-4" />}
+            label={userColumnsNames.neighborhood}
+          />
+        )}
+
         {createdAtColumn && (
           <DateFilterChip
             table={table}
@@ -71,17 +79,6 @@ export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
             label={userColumnsNames.createdAt}
             disabled={!columnIsVisible({ table, columnId: "createdAt" })}
             disabledHint={`Habilite a coluna "${userColumnsNames.createdAt}" para filtrar`}
-          />
-        )}
-
-        {updatedAtColumn && (
-          <DateFilterChip
-            table={table}
-            column={updatedAtColumn}
-            icon={<ClockIcon className="size-4" />}
-            label={userColumnsNames.updatedAt}
-            disabled={!columnIsVisible({ table, columnId: "updatedAt" })}
-            disabledHint={`Habilite a coluna "${userColumnsNames.updatedAt}" para filtrar`}
           />
         )}
       </FilterChipsScrollArea>

@@ -18,31 +18,34 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import type { getUserResponse } from "@/http/users/users";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { adminGetUserResponse } from "@/http/users/users";
 import { responseToast } from "@/lib/toaster";
-import { type CreateUserSchema, createUserSchema } from "@/validations/users";
+import {
+  type CreateUserSchema,
+  type UpdateUserSchema,
+  createUserSchema,
+  updateUserSchema,
+} from "@/validations/users";
 
 interface UserFormProps {
   promises: {
-    userPromise: Promise<getUserResponse>;
+    userPromise: Promise<adminGetUserResponse>;
   };
 
-  /** `true` = update; `false`/absent = create. */
   isUpdating?: boolean;
-  userId?: number;
+  userId?: string;
 
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-/**
- * Form shared by create and update flows — the difference is small (which
- * action to call, which initial values) so one component avoids the two
- * copies drifting apart. Suspends via `use()`; the modal wrapper's
- * `<Suspense>` shows the fallback.
- *
- * @param props Data promise, create/update mode, and success/cancel callbacks.
- */
 export function UserForm({
   promises,
   isUpdating = false,
@@ -52,33 +55,32 @@ export function UserForm({
 }: UserFormProps) {
   const userResponse = use(promises.userPromise);
 
-  const defaultValues = useMemo<CreateUserSchema>(() => {
+  const defaultValues = useMemo<UpdateUserSchema>(() => {
     const user = userResponse.status === 200 ? userResponse.data : undefined;
 
     return {
-      userName: user?.userName ?? "",
+      name: user?.name ?? "",
       email: user?.email ?? "",
+      role: (user?.role?.toLowerCase() === "admin" ? "admin" : "explorer") as "admin" | "explorer",
+      neighborhood: user?.neighborhood ?? "",
       password: "",
     };
   }, [userResponse]);
 
-  const form = useForm<CreateUserSchema>({
-    resolver: zodResolver(createUserSchema),
+  const form = useForm<UpdateUserSchema>({
+    resolver: zodResolver(isUpdating ? updateUserSchema : createUserSchema),
     defaultValues,
   });
 
   const { isSubmitting } = form.formState;
 
-  /**
-   * Picks create or update action by their shared `(data, id?)` signature.
-   *
-   * @param data Validated form values.
-   */
-  async function onSubmitForm(data: CreateUserSchema) {
+  async function onSubmitForm(data: UpdateUserSchema) {
     const formData = new FormData();
-    formData.set("userName", data.userName);
+    formData.set("name", data.name);
     formData.set("email", data.email);
-    formData.set("password", data.password);
+    if (data.role) formData.set("role", data.role);
+    if (data.neighborhood) formData.set("neighborhood", data.neighborhood);
+    if (data.password) formData.set("password", data.password);
 
     const state = isUpdating
       ? await updateUserAction(formData, userId)
@@ -94,7 +96,7 @@ export function UserForm({
 
     responseToast.success({
       title: state.message,
-      description: `O usuário ${data.userName} foi salvo.`,
+      description: `O usuário ${data.name} foi salvo com sucesso.`,
     });
 
     form.reset();
@@ -108,15 +110,15 @@ export function UserForm({
         onSubmit={form.handleSubmit(onSubmitForm)}
         className="space-y-4"
       >
-        {/* userName - field */}
+        {/* name - field */}
         <FormField
           control={form.control}
-          name="userName"
+          name="name"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Nome</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="Digite um nome..." />
+                <Input {...field} placeholder="Digite o nome..." />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -134,7 +136,7 @@ export function UserForm({
                 <Input
                   {...field}
                   type="email"
-                  placeholder="Digite um e-mail..."
+                  placeholder="Digite o e-mail..."
                 />
               </FormControl>
               <FormMessage />
@@ -142,20 +144,74 @@ export function UserForm({
           )}
         />
 
+        {/* role - field */}
+        {isUpdating && (
+          <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Papel</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o papel" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="explorer">Explorador</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {/* neighborhood - field */}
+        {isUpdating && (
+          <FormField
+            control={form.control}
+            name="neighborhood"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Bairro</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Digite o bairro..." />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         {/* password - field */}
         <FormField
           control={form.control}
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Senha</FormLabel>
+              <FormLabel>
+                {isUpdating ? "Nova Senha (opcional)" : "Senha"}
+              </FormLabel>
               <FormControl>
-                <PasswordInput {...field} placeholder="Digite uma senha..." />
+                <PasswordInput
+                  {...field}
+                  placeholder={
+                    isUpdating
+                      ? "Deixe em branco para manter a atual..."
+                      : "Digite uma senha..."
+                  }
+                />
               </FormControl>
 
               {isUpdating && (
                 <FormDescription>
-                  A senha será redefinida com o valor digitado aqui.
+                  Preencha apenas se desejar redefinir a senha do usuário.
                 </FormDescription>
               )}
 

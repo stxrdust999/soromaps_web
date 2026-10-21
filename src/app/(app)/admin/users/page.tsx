@@ -1,4 +1,4 @@
-import { ShieldUserIcon, StoreIcon, UsersIcon } from "lucide-react";
+import { ShieldUserIcon, UsersIcon } from "lucide-react";
 import { Suspense } from "react";
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { USERS_LIST_TAG } from "@/constants/users";
-import { getUsers } from "@/http/users/users";
+import { listUsers } from "@/http/users/users";
 import { UsersTable } from "./_components/table";
 
 interface InformationBadgeProps {
@@ -37,17 +37,22 @@ function InformationBadge({ icon, value, label }: InformationBadgeProps) {
 }
 
 /**
- * Server Component — data orchestration only: fires promises without
- * `await` (so the header ships on first byte and the table streams in),
- * groups them into `promises`, and sets up the layout and `Suspense`.
- *
- * `next.tags` names this read's cache — the same string server actions
- * pass to `updateTag()` after writing.
+ * Server Component orchestrating user management data.
+ * Initiates user list promise with revalidation tags and calculates role counters.
  */
-export default function ManageUsersPage() {
-  const usersPromise = getUsers({ next: { tags: [USERS_LIST_TAG] } });
+export default async function ManageUsersPage() {
+  const usersPromise = listUsers(
+    { page: 1, pageSize: 100 },
+    { next: { tags: [USERS_LIST_TAG] } },
+  );
 
   const promises = { usersPromise };
+
+  const initialResponse = await usersPromise;
+  const usersList = initialResponse.status === 200 ? initialResponse.data.items : [];
+  const totalUsers = initialResponse.status === 200 ? initialResponse.data.totalCount : 0;
+  const explorersCount = usersList.filter((u) => u.role.toLowerCase() === "explorer").length;
+  const adminsCount = usersList.filter((u) => u.role.toLowerCase() === "admin").length;
 
   const subitem = (
     <div className="flex flex-row gap-2 items-center mt-1">
@@ -76,25 +81,19 @@ export default function ManageUsersPage() {
           </Avatar>
         </AvatarGroup>
 
-        <span className="text-xs text-white">184 Usuários Cadastrados</span>
+        <span className="text-xs text-white">{totalUsers} Usuários Cadastrados</span>
       </Badge>
 
       <InformationBadge
         icon={<UsersIcon size={16} className="text-white/75" />}
-        value="144"
+        value={String(explorersCount)}
         label="exploradores"
       />
 
       <InformationBadge
         icon={<ShieldUserIcon size={16} className="text-white/75" />}
-        value="5"
+        value={String(adminsCount)}
         label="administradores"
-      />
-
-      <InformationBadge
-        icon={<StoreIcon size={14} className="text-white/75" />}
-        value="35"
-        label="comércios"
       />
     </div>
   );
@@ -106,7 +105,7 @@ export default function ManageUsersPage() {
         description="Gerencie os usuários cadastrados na plataforma."
         subitems={subitem}
       >
-        <Suspense fallback={<TableSkeletonState columns={6} />}>
+        <Suspense fallback={<TableSkeletonState columns={5} />}>
           <UsersTable promises={promises} />
         </Suspense>
       </PageSection>

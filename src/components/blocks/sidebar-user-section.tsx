@@ -64,6 +64,7 @@ export function SidebarUserSection({
           <Button
             variant={"ghost"}
             className="flex flex-row gap-3 w-full justify-start"
+            onClick={() => router.push("/profile")}
           >
             <PencilIcon />
             <p>Editar perfil</p>
@@ -72,6 +73,7 @@ export function SidebarUserSection({
           <Button
             variant={"ghost"}
             className="flex flex-row gap-3 w-full justify-start"
+            onClick={() => router.push("/profile")}
           >
             <UserCircleIcon />
             <p>Gerenciar Conta</p>

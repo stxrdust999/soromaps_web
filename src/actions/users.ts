@@ -2,22 +2,23 @@
 
 import { updateTag } from "next/cache";
 
-import { USERS_LIST_TAG, userShowTag } from "@/constants/users";
-import { deleteUser, postUser, putUser } from "@/http/users/users";
+import { CURRENT_USER_TAG, USERS_LIST_TAG, userShowTag } from "@/constants/users";
+import { getApiErrorMessage } from "@/helpers/api-error";
+import {
+  adminDeleteUser,
+  adminUpdateUser,
+  deleteCurrentUser,
+  registerUser,
+  updateCurrentUser,
+} from "@/http/users/users";
+import { clearAuthCookies } from "@/lib/session";
 import type { FormState } from "@/types/form";
-import { createUserSchema, updateUserSchema } from "@/validations/users";
-
-/**
- * User Server Actions — the screen's only write path.
- *
- * Each one revalidates `FormData` with the form's own Zod schema, calls
- * `src/http`, then `updateTag()`s every affected tag. `updateTag` (not
- * `revalidateTag`) is what gives read-your-own-writes inside an action, so
- * the table arrives fresh when the modal closes, with no `router.refresh()`.
- *
- * The success `return` sits outside the `try` on purpose: `redirect()` works
- * by throwing in Next, and a broad `catch` would swallow that control flow.
- */
+import {
+  type CreateUserSchema,
+  type UpdateUserSchema,
+  createUserSchema,
+  updateUserSchema,
+} from "@/validations/users";
 
 const INVALID_PAYLOAD_MESSAGE =
   "Algo de errado aconteceu, por favor tente novamente.";
@@ -25,12 +26,9 @@ const REQUEST_FAILED_MESSAGE =
   "Um erro ocorreu, por favor tente novamente em alguns minutos.";
 
 /**
- * Creates a user.
- *
- * @param data Form data matching `createUserSchema`.
- * @returns Result with message and field errors, if any.
+ * Creates a user account from administrative panel and invalidates cached user lists.
  */
-async function createUserAction(data: FormData): Promise<FormState> {
+export async function createUserAction(data: FormData): Promise<FormState> {
   const result = createUserSchema.safeParse(Object.fromEntries(data));
 
   if (!result.success) {
@@ -42,16 +40,23 @@ async function createUserAction(data: FormData): Promise<FormState> {
   }
 
   try {
-    const response = await postUser(result.data);
+    const response = await registerUser({
+      name: result.data.name,
+      email: result.data.email,
+      password: result.data.password,
+    });
 
-    if (!response.ok) {
-      throw new Error(`POST /api/users respondeu ${response.status}`);
+    if (response.status !== 201) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
     }
 
     updateTag(USERS_LIST_TAG);
   } catch (error) {
-    console.error("create user failed:", error);
-
+    console.error("createUserAction error:", error);
     return {
       success: false,
       message: REQUEST_FAILED_MESSAGE,
@@ -67,16 +72,11 @@ async function createUserAction(data: FormData): Promise<FormState> {
 }
 
 /**
- * Updates a user. Signature mirrors the create action plus the id, so the
- * form can pick one of the two and serve both modes with one component.
- *
- * @param data Form data matching `updateUserSchema`.
- * @param id User id; rejected when not a number.
- * @returns Result with message and field errors, if any.
+ * Updates an existing user account from administrative modal and invalidates specific cache tags.
  */
-async function updateUserAction(
+export async function updateUserAction(
   data: FormData,
-  id?: number,
+  id?: string,
 ): Promise<FormState> {
   const result = updateUserSchema.safeParse(Object.fromEntries(data));
 
@@ -88,24 +88,35 @@ async function updateUserAction(
     };
   }
 
+  if (!id) {
+    return {
+      success: false,
+      message: "ID de usuário inválido.",
+      errors: null,
+    };
+  }
+
   try {
-    const userId = Number(id);
+    const response = await adminUpdateUser(id, {
+      name: result.data.name,
+      email: result.data.email,
+      role: result.data.role,
+      neighborhood: result.data.neighborhood || undefined,
+      password: result.data.password || undefined,
+    });
 
-    if (Number.isNaN(userId)) {
-      throw new Error("id de usuário inválido");
-    }
-
-    const response = await putUser(userId, result.data);
-
-    if (!response.ok) {
-      throw new Error(`PUT /api/users/${userId} respondeu ${response.status}`);
+    if (response.status !== 200) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
     }
 
     updateTag(USERS_LIST_TAG);
-    updateTag(userShowTag(userId));
+    updateTag(userShowTag(id));
   } catch (error) {
-    console.error("update user failed:", error);
-
+    console.error("updateUserAction error:", error);
     return {
       success: false,
       message: REQUEST_FAILED_MESSAGE,
@@ -121,25 +132,24 @@ async function updateUserAction(
 }
 
 /**
- * Deletes a user. No form involved — the confirmation modal fires it with
- * the id alone.
- *
- * @param id User id.
- * @returns Result with message; `errors` is always `null`.
+ * Deletes a user by ID with last-admin conflict handling.
  */
-async function deleteUserAction(id: number): Promise<FormState> {
+export async function deleteUserAction(id: string): Promise<FormState> {
   try {
-    const response = await deleteUser(id);
+    const response = await adminDeleteUser(id);
 
-    if (!response.ok) {
-      throw new Error(`DELETE /api/users/${id} respondeu ${response.status}`);
+    if (response.status !== 204) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
     }
 
     updateTag(USERS_LIST_TAG);
     updateTag(userShowTag(id));
   } catch (error) {
-    console.error("delete user failed:", error);
-
+    console.error("deleteUserAction error:", error);
     return {
       success: false,
       message: REQUEST_FAILED_MESSAGE,
@@ -154,4 +164,82 @@ async function deleteUserAction(id: number): Promise<FormState> {
   };
 }
 
-export { createUserAction, deleteUserAction, updateUserAction };
+/**
+ * Updates profile details of the currently authenticated user.
+ */
+export async function updateCurrentUserAction(data: FormData): Promise<FormState> {
+  const name = String(data.get("name") ?? "").trim();
+  const neighborhood = String(data.get("neighborhood") ?? "").trim();
+  const biography = String(data.get("biography") ?? "").trim();
+
+  if (!name) {
+    return {
+      success: false,
+      message: "O nome é obrigatório.",
+      errors: null,
+    };
+  }
+
+  try {
+    const response = await updateCurrentUser({
+      name,
+      neighborhood: neighborhood || undefined,
+      biography: biography || undefined,
+    });
+
+    if (response.status !== 200) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
+    }
+
+    updateTag(CURRENT_USER_TAG);
+  } catch (error) {
+    console.error("updateCurrentUserAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+
+  return {
+    success: true,
+    message: "Perfil atualizado com sucesso.",
+    errors: null,
+  };
+}
+
+/**
+ * Deletes the currently authenticated account and clears session cookies.
+ */
+export async function deleteCurrentUserAction(): Promise<FormState> {
+  try {
+    const response = await deleteCurrentUser();
+
+    if (response.status !== 204) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
+    }
+
+    await clearAuthCookies();
+  } catch (error) {
+    console.error("deleteCurrentUserAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+
+  return {
+    success: true,
+    message: "Conta excluída com sucesso.",
+    errors: null,
+  };
+}

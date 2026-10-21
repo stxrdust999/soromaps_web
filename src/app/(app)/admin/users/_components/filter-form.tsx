@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { getUsersResponse } from "@/http/users/users";
+import type { listUsersResponse } from "@/http/users/users";
 import { cn } from "@/lib/utils";
 import type { UserResource } from "@/types/user";
 import { formatISODate } from "@/utils/formatters/format-date";
@@ -40,25 +40,12 @@ interface UserListFilterFormProps {
   table: Table<UserResource>;
   form: ReturnType<typeof useForm<UserFilterFormSchema>>;
   promises: {
-    usersPromise: Promise<getUsersResponse>;
+    usersPromise: Promise<listUsersResponse>;
   };
 
   onClose: () => void;
 }
 
-/**
- * Filter form — sheet content.
- *
- * The `useForm` instance arrives as a prop (created in the toolbar) because
- * this component suspends with `use()`, and state declared in a suspending
- * component gets discarded. The form id comes from `FILTER_FORM_ID` since
- * the submit button lives in the sheet footer, outside the `<form>` tree,
- * and triggers via the HTML `form` attribute. Submit never calls the API —
- * it turns form values into `ColumnFiltersState` and applies them to the
- * already-loaded table data. Hidden columns get their filter disabled.
- *
- * @param props Table instance, form instance, data promises, close callback.
- */
 export function UserListFilterForm({
   table,
   form,
@@ -67,21 +54,13 @@ export function UserListFilterForm({
 }: UserListFilterFormProps) {
   const usersResponse = use(promises.usersPromise);
   const totalUsers = useMemo(() => {
-    return usersResponse.status === 200 ? usersResponse.data.length : 0;
+    return usersResponse.status === 200 ? usersResponse.data.totalCount : 0;
   }, [usersResponse]);
 
   const columnVisibility = {
     createdAt: columnIsVisible({ table, columnId: "createdAt" }),
-    updatedAt: columnIsVisible({ table, columnId: "updatedAt" }),
   };
 
-  /**
-   * Applies the filters to the table and closes the sheet.
-   *
-   * ⚠️ `setColumnFilters` replaces the whole state, including the toolbar
-   * search filter — it survives because search targets `email`, which is
-   * also a schema key.
-   */
   function onSubmitForm(data: UserFilterFormSchema) {
     const filters = resolveFilters(data);
 
@@ -99,21 +78,21 @@ export function UserListFilterForm({
         className="w-full space-y-4 py-4"
       >
         <p className="text-muted-foreground text-xs">
-          {totalUsers} usuário(s) carregado(s).
+          {totalUsers} usuário(s) cadastrado(s).
         </p>
 
-        {/* userName - field */}
+        {/* name - field */}
         <FormField
           control={form.control}
-          name="userName"
+          name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{userColumnsNames.userName}</FormLabel>
+              <FormLabel>{userColumnsNames.name}</FormLabel>
               <FormControl>
                 <Input
                   {...field}
                   value={field.value ?? ""}
-                  placeholder="Ex.: arthur"
+                  placeholder="Ex.: Arthur"
                 />
               </FormControl>
             </FormItem>
@@ -132,6 +111,24 @@ export function UserListFilterForm({
                   {...field}
                   value={field.value ?? ""}
                   placeholder="Ex.: arthur@exemplo.com"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {/* neighborhood - field */}
+        <FormField
+          control={form.control}
+          name="neighborhood"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{userColumnsNames.neighborhood}</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  placeholder="Ex.: Campolim"
                 />
               </FormControl>
             </FormItem>
@@ -168,37 +165,6 @@ export function UserListFilterForm({
             </FormItem>
           )}
         />
-
-        {/* updatedAt - field */}
-        <FormField
-          control={form.control}
-          name="updatedAt"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{userColumnsNames.updatedAt}</FormLabel>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <DateField
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={!columnVisibility.updatedAt}
-                    />
-                  </div>
-                </TooltipTrigger>
-
-                {!columnVisibility.updatedAt && (
-                  <TooltipContent>
-                    <p>
-                      Habilite a coluna "{userColumnsNames.updatedAt}" para
-                      filtrar
-                    </p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </FormItem>
-          )}
-        />
       </form>
     </Form>
   );
@@ -210,12 +176,6 @@ interface DateFieldProps {
   disabled?: boolean;
 }
 
-/**
- * Filter date field: button with the formatted date opening a calendar.
- * Local to this file until a second screen needs it.
- *
- * @param props Selected date, change handler, disabled flag.
- */
 function DateField({ value, onChange, disabled }: DateFieldProps) {
   return (
     <Popover>
