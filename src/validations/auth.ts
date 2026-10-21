@@ -1,20 +1,15 @@
 import z from "zod";
 
-/**
- * Validações de login
- */
 export const loginSchema = z.object({
-  userName: z.string().min(1, "Nome de usuário é obrigatório"),
-  password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
+  email: z.string().trim().min(1, "E-mail é obrigatório").email("E-mail inválido"),
+  password: z.string().min(1, "Senha é obrigatória"),
 });
 
-/**
- * Validações de cadastro
- */
 export const registerSchema = z
   .object({
-    userName: z.string().min(3, "O usuário deve conter no mínimo 3 caracteres"),
-    password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
+    name: z.string().trim().min(2, "O nome deve conter no mínimo 2 caracteres"),
+    email: z.string().trim().min(1, "E-mail é obrigatório").email("E-mail inválido"),
+    password: z.string().min(8, "A senha deve ter no mínimo 8 caracteres"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {

@@ -10,38 +10,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { responseToast } from "@/lib/toaster";
 
-/**
- * Página de login
- */
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const [username, setUsername] = React.useState("");
+  const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
 
-  const userData = {
-    userName: username,
-    password: password,
-  };
-
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
+    if (!email.trim() || !password.trim()) {
       responseToast.error({
         title: "Campos obrigatórios",
-        description: "Por favor, preencha o nome de usuário e a senha.",
+        description: "Por favor, preencha o e-mail e a senha.",
       });
       return;
     }
 
     startTransition(async () => {
       try {
-        const result = await loginAction(userData);
+        const result = await loginAction({ email, password });
 
-        if (result?.error) {
+        if (!result.success) {
           responseToast.error({
             title: "Erro ao entrar na conta",
-            description: result.error,
+            description: result.message ?? "Credenciais inválidas.",
           });
           return;
         }
@@ -53,7 +45,7 @@ export default function LoginPage() {
 
         router.push("/home");
         router.refresh();
-      } catch (_error) {
+      } catch {
         responseToast.error({
           title: "Erro ao entrar na conta",
           description: "Ocorreu um problema de conexão com o servidor.",
@@ -88,14 +80,15 @@ export default function LoginPage() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Nome de usuário
+                E-mail
               </span>
               <Input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isPending}
                 className="shadow-none text-md h-11 border-zinc-200 focus-visible:border-zinc-400"
-                placeholder="Digite seu nome de usuário..."
+                placeholder="Digite seu e-mail..."
               />
             </div>
 
