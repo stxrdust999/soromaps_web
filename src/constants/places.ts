@@ -1,7 +1,9 @@
 export const PLACES_LIST_TAG = "places:list";
 export const placeShowTag = (id: string | number) => `places:${id}`;
+export const placeReviewsTag = (id: string | number) => `places:${id}:reviews`;
 export const MODERATION_QUEUE_TAG = "moderation:queue";
 export const MODERATION_HISTORY_TAG = "moderation:history";
+export const ADMIN_REVIEWS_LIST_TAG = "admin:reviews:list";
 
 export interface PlaceCategory {
   label: string;

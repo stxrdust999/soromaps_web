@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
+import { removeContentAction } from "@/actions/reviews";
 import type { RemovalReason } from "@/constants/content-removal";
+import type { AdminReviewItemDto } from "@/http/api.schemas";
+import { adminListReviews } from "@/http/admin-reviews/admin-reviews";
 import { type ReviewMock, reviewsMock } from "@/mocks/admin-reviews";
 
 /**
@@ -28,8 +32,8 @@ export interface ReviewSignal {
 }
 
 /** Média das avaliações publicadas de cada local. */
-function averageByPlace(reviews: ReviewMock[]): Map<number, number> {
-  const totals = new Map<number, { soma: number; contagem: number }>();
+function averageByPlace(reviews: ReviewMock[]): Map<number | string, number> {
+  const totals = new Map<number | string, { soma: number; contagem: number }>();
 
   for (const review of reviews) {
     if (review.status !== "publicada") continue;
@@ -49,22 +53,41 @@ function averageByPlace(reviews: ReviewMock[]): Map<number, number> {
 }
 
 /**
+ * Converte item retornado por adminListReviews para ReviewMock.
+ */
+function mapAdminReviewDtoToMock(dto: AdminReviewItemDto): ReviewMock {
+  const diffDays = Math.max(
+    1,
+    Math.floor(
+      (Date.now() - new Date(dto.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+    ),
+  );
+
+  return {
+    id: dto.id,
+    autorId: "ana",
+    local: {
+      id: dto.placeId as any,
+      nome: dto.placeName,
+      bairro: "Sorocaba",
+      categoria: "Local",
+    },
+    nota: typeof dto.rating === "string" ? parseFloat(dto.rating) : dto.rating,
+    corpo: dto.content,
+    diasPublicado: diffDays,
+    status: "publicada",
+    spam: dto.signals?.includes("spam"),
+    comentarios: [],
+  };
+}
+
+/**
  * Categorias formais de problema numa avaliação.
- *
- * `duplicada` e `discrepante` são **derivadas do conjunto** — é exatamente o
- * que `docs/todo/admin/reviews.md` quer dizer com "só aparece olhando o
- * conjunto, nunca uma a uma". `spam` é flag do registro porque marcar exige
- * analisar texto; quando `Analise` existir, ela vem do backend.
- *
- * @param review Avaliação em julgamento.
- * @param reviews Base inteira, para as médias e a checagem de repetição.
- * @param averages Médias por local, pré-calculadas para evitar O(n²).
- * @returns Sinais aplicáveis, dos mais graves aos menos.
  */
 export function getReviewSignals(
   review: ReviewMock,
   reviews: ReviewMock[],
-  averages: Map<number, number>,
+  averages: Map<number | string, number>,
 ): ReviewSignal[] {
   const signals: ReviewSignal[] = [];
 
@@ -96,15 +119,25 @@ export function getReviewSignals(
 }
 
 /**
- * Estado da listagem de avaliações. `Analise` não existe no banco: remover
- * apenas troca o `status` no array local, porque a exclusão é **lógica** — a
- * avaliação sai da vitrine e continua auditável.
- *
- * Quando a entidade existir, isto vira `src/http/reviews` + Server Actions, e
- * a remoção precisa ser a **mesma** action consumida por `/admin/reports`.
+ * Estado da listagem administrativa de avaliações integrado à API real.
  */
 export function useReviews() {
   const [reviews, setReviews] = useState<ReviewMock[]>(reviewsMock);
+
+  const reload = useCallback(async () => {
+    try {
+      const response = await adminListReviews({ Page: 1, PageSize: 100 });
+      if (response.status === 200 && response.data.items && response.data.items.length > 0) {
+        setReviews(response.data.items.map(mapAdminReviewDtoToMock));
+      }
+    } catch (error) {
+      console.error("Erro ao carregar avaliações administrativas:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const averages = useMemo(() => averageByPlace(reviews), [reviews]);
 
@@ -134,24 +167,33 @@ export function useReviews() {
     };
   }, [reviews, signalsById]);
 
-  /** Marca como removida, guardando quem removeu e por quê. */
-  const remove = useCallback((ids: string[], motivo: RemovalReason) => {
-    const alvo = new Set(ids);
+  /** Marca como removida com auditoria na API. */
+  const remove = useCallback(
+    async (ids: string[], motivo: RemovalReason) => {
+      const alvo = new Set(ids);
 
-    setReviews((current) =>
-      current.map((review) =>
-        alvo.has(review.id)
-          ? {
-              ...review,
-              status: "removida" as const,
-              // Sem sessão nem papel de admin, o autor da decisão é fixo.
-              removidaPor: "Rafael Sousa",
-              motivoRemocao: motivo,
-            }
-          : review,
-      ),
-    );
-  }, []);
+      setReviews((current) =>
+        current.map((review) =>
+          alvo.has(review.id)
+            ? {
+                ...review,
+                status: "removida" as const,
+                removidaPor: "Admin",
+                motivoRemocao: motivo,
+              }
+            : review,
+        ),
+      );
+
+      for (const id of ids) {
+        const result = await removeContentAction("review", id, motivo);
+        if (!result.success) {
+          toast.error(result.message);
+        }
+      }
+    },
+    [],
+  );
 
   const restore = useCallback((id: string) => {
     setReviews((current) =>
@@ -168,7 +210,7 @@ export function useReviews() {
     );
   }, []);
 
-  return { reviews, signalsById, stats, remove, restore };
+  return { reviews, signalsById, stats, remove, restore, reload };
 }
 
 export type { ReviewMock };
