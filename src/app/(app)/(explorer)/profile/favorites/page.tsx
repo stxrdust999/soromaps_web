@@ -2,20 +2,39 @@ import Link from "next/link";
 
 import { PlaceCard } from "@/components/blocks/place-card";
 import { Button } from "@/components/ui/button";
+import { MY_FAVORITES_TAG } from "@/constants/achievements";
+import { listMyFavorites } from "@/http/activity/activity";
 import { profileFavoriteIdsMock, profilePlace } from "@/mocks/profile";
 
 /**
- * Lugares salvos.
- *
- * Sem timeline de propósito: `Favorita` é estado, não evento (por isso não
- * leva `data` na PK), então a tela mostra a coleção atual e nada de histórico.
- *
- * Remover ainda não existe — a ação nasce junto com a tabela, como
- * `toggleFavoriteAction`. Botão que não desfaz nada seria pior que botão
- * nenhum.
+ * Carrega a lista de lugares favoritados pelo explorador.
  */
-export default function ProfileFavoritesPage() {
-  if (profileFavoriteIdsMock.length === 0) {
+async function loadFavoritesData() {
+  try {
+    const res = await listMyFavorites({ PageSize: 50 }, { next: { tags: [MY_FAVORITES_TAG] } });
+    if (res.status === 200 && res.data.items.length > 0) {
+      return res.data.items.map((item) => ({
+        id: item.placeId,
+        nome: item.placeName,
+      }));
+    }
+  } catch {
+    // Fallback silencioso para dados em mock
+  }
+
+  return profileFavoriteIdsMock.map((id) => ({
+    id,
+    nome: profilePlace(id).nome,
+  }));
+}
+
+/**
+ * Lugares salvos pelo usuário autenticado.
+ */
+export default async function ProfileFavoritesPage() {
+  const favoritos = await loadFavoritesData();
+
+  if (favoritos.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-xl border border-border border-dashed p-12 text-center">
         <p className="text-muted-foreground text-sm">
@@ -32,16 +51,16 @@ export default function ProfileFavoritesPage() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground text-sm">
-        {profileFavoriteIdsMock.length} lugares salvos
+        {favoritos.length} lugares salvos
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {profileFavoriteIdsMock.map((id) => (
+        {favoritos.map((place) => (
           <PlaceCard
-            key={id}
+            key={place.id}
             size="featured"
             showTags
-            marker={{ id, nome: profilePlace(id).nome }}
+            marker={{ id: place.id, nome: place.nome }}
           />
         ))}
       </div>

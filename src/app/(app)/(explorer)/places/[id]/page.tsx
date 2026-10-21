@@ -9,26 +9,31 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Carousel from "@/components/ui/carousel";
 import { Separator } from "@/components/ui/separator";
-import { placeShowTag } from "@/constants/places";
+import { placeReviewsTag, placeShowTag } from "@/constants/places";
+import { listReviewsByPlace } from "@/http/reviews/reviews";
 import { getPlaceById } from "@/http/places/places";
+import { getSession } from "@/lib/session";
 import {
   getMarkerDetailsMock,
   getPlaceCommentMock,
   getPlaceLeaderboardMock,
 } from "@/mocks/markers";
 import { MarkerDeleteDialog } from "./_components/marker-delete-dialog";
+import { PlaceActivityActions } from "./_components/place-activity-actions";
+import { PlaceReviewsSection } from "./_components/place-reviews-section";
 
 interface PlaceDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
 /**
- * Detalhe de um local integrado à API (`getPlaceById`) com fallback gracioso.
+ * Detalhe de um local integrado à API (`getPlaceById`, `listReviewsByPlace`) com fallback gracioso.
  */
 export default async function PlaceDetailPage({
   params,
 }: PlaceDetailPageProps) {
   const { id } = await params;
+  const session = await getSession();
 
   let placeName = "Local";
   let placeCategory = "Local";
@@ -41,14 +46,20 @@ export default async function PlaceDetailPage({
   let reviewsCount = 12;
   let hasWifi = true;
   let isPetFriendly = true;
+  let reviewsList: any[] = [];
 
   try {
-    const response = await getPlaceById(id, {
-      next: { tags: [placeShowTag(id)] },
-    });
+    const [placeResponse, reviewsResponse] = await Promise.all([
+      getPlaceById(id, {
+        next: { tags: [placeShowTag(id)] },
+      }),
+      listReviewsByPlace(id, undefined, {
+        next: { tags: [placeReviewsTag(id)] },
+      }),
+    ]);
 
-    if (response.status === 200) {
-      const data = response.data;
+    if (placeResponse.status === 200) {
+      const data = placeResponse.data;
       placeName = data.name;
       placeCategory = data.category?.name ?? "Local";
       placeNeighborhood = data.neighborhood;
@@ -68,21 +79,10 @@ export default async function PlaceDetailPage({
           : data.reviewsCount || 0;
       hasWifi = data.hasWifi;
       isPetFriendly = data.isPetFriendly;
-    } else {
-      const markerId = Number(id);
-      if (!Number.isNaN(markerId)) {
-        const details = getMarkerDetailsMock(markerId);
-        placeName = details.categoria;
-        placeCategory = details.categoria;
-        placeNeighborhood = details.bairro;
-        placeDescription = details.descricao;
-        placeCoverUrl = details.fotoUrl;
-        placePhotos = details.fotos;
-        rating = details.nota;
-        reviewsCount = details.totalAvaliacoes;
-        hasWifi = details.temWifi;
-        isPetFriendly = details.petFriendly;
-      }
+    }
+
+    if (reviewsResponse.status === 200 && reviewsResponse.data.items) {
+      reviewsList = reviewsResponse.data.items;
     }
   } catch {
     const markerId = Number(id);
@@ -145,7 +145,9 @@ export default async function PlaceDetailPage({
         title={placeName}
         description={`${placeNeighborhood} · ${placeCategory}`}
         actions={
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <PlaceActivityActions placeId={id} />
+
             <Button asChild variant="outline">
               <Link href="/home">
                 <MapPinIcon className="size-4" />
@@ -158,8 +160,8 @@ export default async function PlaceDetailPage({
         }
         subitems={placeSubItem}
       >
-        <div className="flex flex-row gap-4">
-          <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex flex-1 flex-col gap-6">
             <div className="rounded-md w-full">
               <div className="flex flex-col gap-2">
                 <span className="text-xl font-semibold">Descrição</span>
@@ -175,7 +177,7 @@ export default async function PlaceDetailPage({
 
               <Separator />
 
-              <div className="pt-2 pb-16">
+              <div className="pt-2 pb-6">
                 <Carousel
                   slides={placePhotos.map((src, index) => ({
                     src,
@@ -184,9 +186,16 @@ export default async function PlaceDetailPage({
                 />
               </div>
             </div>
+
+            {/* Seção de Avaliações e Comentários da Comunidade */}
+            <PlaceReviewsSection
+              placeId={id}
+              initialReviews={reviewsList}
+              currentUserId={session?.id}
+            />
           </div>
 
-          <aside className="flex w-fit flex-col gap-4">
+          <aside className="flex w-full lg:w-80 shrink-0 flex-col gap-4">
             <PlaceLeaderboard
               visitors={leaderboard}
               fullRankingHref={`/places/${id}/leaderboard`}
