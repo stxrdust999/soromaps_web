@@ -1,10 +1,15 @@
+import type { CategorySummaryDto } from "@/http/api.schemas";
+
 /**
- * Marcador como `GET /api/markers` devolve — a API mantém os campos em pt-BR,
- * diferente de `UserResource`, que chega em camelCase.
+ * Representa os dados essenciais de um local para renderização de marcadores e prévias no mapa.
  */
 export interface MarkerResource {
-  id: number;
+  id: string | number;
   nome: string;
   lat: number;
   lng: number;
+  category?: CategorySummaryDto | null;
+  ratingAverage?: number;
+  reviewsCount?: number;
+  coverPhotoUrl?: string | null;
 }
