@@ -10,9 +10,9 @@
 
 | # | Módulo | Arquivo | Depende na API de | Status |
 |---|---|---|---|---|
-| 00 | **Infraestrutura HTTP, Orval, Proxy e Erros** | [00-infra-http-e-erros.md](./00-infra-http-e-erros.md) | Baseline OpenAPI + `ProblemDetails` (✅ Pronto) | 💤 |
-| 01 | **Autenticação, Cookies `httpOnly` e Sessão** | [01-autenticacao-e-sessao.md](./01-autenticacao-e-sessao.md) | `AuthController` (✅ Pronto) | 💤 |
-| 02 | **Usuários, Perfil e Administração de Contas** | [02-usuarios-e-perfil.md](./02-usuarios-e-perfil.md) | `UsersController` + [02-UsuariosAdmin.md](../../../soromaps_api/Docs/Todo/Api/02-UsuariosAdmin.md) | 💤 |
+| 00 | **Infraestrutura HTTP, Orval, Proxy e Erros** | [00-infra-http-e-erros.md](./00-infra-http-e-erros.md) | Baseline OpenAPI + `ProblemDetails` (✅ Pronto) | ✅ |
+| 01 | **Autenticação, Cookies `httpOnly` e Sessão** | [01-autenticacao-e-sessao.md](./01-autenticacao-e-sessao.md) | `AuthController` (✅ Pronto) | ✅ |
+| 02 | **Usuários, Perfil e Administração de Contas** | [02-usuarios-e-perfil.md](./02-usuarios-e-perfil.md) | `UsersController` + [02-UsuariosAdmin.md](../../../soromaps_api/Docs/Todo/Api/02-UsuariosAdmin.md) | ✅ |
 | 03 | **Catálogo de Locais, Categorias e Mapa** | [03-catalogo-locais-e-categorias.md](./03-catalogo-locais-e-categorias.md) | `PlacesController` / `CategoriesController` + [03-CatalogoELocais.md](../../../soromaps_api/Docs/Todo/Api/03-CatalogoELocais.md) | 💤 |
 | 04 | **Moderação de Locais** | [04-moderacao-de-locais.md](./04-moderacao-de-locais.md) | [04-ModeracaoDeLocais.md](../../../soromaps_api/Docs/Todo/Api/04-ModeracaoDeLocais.md) | 💤 |
 | 05 | **Avaliações, Comentários e Remoções** | [05-avaliacoes-e-comentarios.md](./05-avaliacoes-e-comentarios.md) | `ReviewsController` / `CommentsController` + [05-AvaliacoesEComentarios.md](../../../soromaps_api/Docs/Todo/Api/05-AvaliacoesEComentarios.md) | 💤 |
