@@ -1,7 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
+import {
+  batchDecideModerationAction,
+  decidePlaceModerationAction,
+  undoModerationDecisionAction,
+} from "@/actions/moderation";
+import type { ModerationPlaceItemDto } from "@/http/api.schemas";
+import { listModerationPlaces } from "@/http/moderation/moderation";
 import {
   type ModerationItemMock,
   type ModerationStatus,
@@ -18,11 +26,82 @@ interface QueueFilters {
 }
 
 /**
+ * Converte item da API para a representação consumida pelos componentes.
+ */
+function mapDtoToItemMock(dto: ModerationPlaceItemDto): ModerationItemMock {
+  const statusStr: ModerationStatus =
+    dto.status === 2
+      ? "aprovado"
+      : dto.status === 3
+        ? "rejeitado"
+        : dto.status === 1
+          ? "devolvido"
+          : "pendente";
+
+  const diffMs = Date.now() - new Date(dto.createdAt).getTime();
+  const diasNaFila = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  const dup =
+    dto.possibleDuplicates && dto.possibleDuplicates.length > 0
+      ? {
+          nome: dto.possibleDuplicates[0].name,
+          distanciaMetros:
+            typeof dto.possibleDuplicates[0].distanceMeters === "string"
+              ? parseInt(dto.possibleDuplicates[0].distanceMeters, 10)
+              : dto.possibleDuplicates[0].distanceMeters,
+          similaridadeNome: 85,
+          comparacao: [
+            {
+              label: "Nome",
+              emAnalise: dto.name,
+              existente: dto.possibleDuplicates[0].name,
+              igual: dto.name.toLowerCase() === dto.possibleDuplicates[0].name.toLowerCase(),
+            },
+            {
+              label: "Bairro",
+              emAnalise: dto.neighborhood,
+              existente: dto.possibleDuplicates[0].neighborhood,
+              igual: dto.neighborhood === dto.possibleDuplicates[0].neighborhood,
+            },
+          ],
+        }
+      : undefined;
+
+  return {
+    id: dto.id,
+    nome: dto.name,
+    categoria: dto.category.name,
+    bairro: dto.neighborhood,
+    diasNaFila,
+    fotos: dto.photos.length,
+    status: statusStr,
+    autorId: "ana",
+    autorNovo:
+      (dto.author
+        ? typeof dto.author.totalSubmittedPlaces === "string"
+          ? parseInt(dto.author.totalSubmittedPlaces, 10)
+          : dto.author.totalSubmittedPlaces
+        : 0) <= 1,
+    duplicata: dup,
+    vizinhos: [],
+    campos: {
+      nome: dto.name,
+      categoria: dto.category.name,
+      bairro: dto.neighborhood,
+      coordenadas: `${dto.latitude}, ${dto.longitude}`,
+      descricao: dto.description || null,
+      sobre: dto.about || null,
+      melhorHorario: dto.bestTime || null,
+      segredoLocal: dto.localSecret || null,
+      temWifi: dto.hasWifi ? "Sim" : "Não",
+      petFriendly: dto.isPetFriendly ? "Sim" : "Não",
+    },
+  };
+}
+
+/**
  * Item merece atenção antes dos outros: duplicata suspeita, ficha incompleta
  * ou autor sem histórico. Sem alerta = candidato a aprovação rápida.
- *
- * @param item Ponto na fila.
- * @returns `true` quando há pelo menos um sinal de risco.
  */
 export function hasAlert(item: ModerationItemMock): boolean {
   return Boolean(item.duplicata || isIncomplete(item) || item.autorNovo);
@@ -46,23 +125,48 @@ function matchesFilters(
 }
 
 /**
- * Estado da fila de moderação. Tudo em memória: não há API, então decidir
- * apenas troca o `status` do item no array local.
- *
- * O `snapshot` guarda a lista anterior a cada decisão — é o que sustenta o
- * "Desfazer" do toast, e é por isso que ele é substituído (não empilhado) a
- * cada nova decisão: a janela de arrependimento é a última ação, só.
+ * Estado da fila de moderação integrado à API real com fallback para os mocks.
  */
 export function useModerationQueue() {
-  const [items, setItems] = useState(moderationQueueMock);
-  const [snapshot, setSnapshot] = useState<ModerationItemMock[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>("zeca");
+  const [items, setItems] = useState<ModerationItemMock[]>(moderationQueueMock);
+  const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
   const [markedIds, setMarkedIds] = useState<string[]>([]);
+  const [lastDecidedId, setLastDecidedId] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<QueueFilters>({
     status: "pendente",
     categoria: ALL_CATEGORIES,
     soComAlerta: false,
   });
+
+  const reload = useCallback(async () => {
+    try {
+      const response = await listModerationPlaces({
+        Page: 1,
+        PageSize: 50,
+      });
+
+      if (
+        response.status === 200 &&
+        response.data.items &&
+        response.data.items.length > 0
+      ) {
+        const mapped = response.data.items.map(mapDtoToItemMock);
+        setItems(mapped);
+        setSelectedId((current) =>
+          current && mapped.some((m) => m.id === current)
+            ? current
+            : mapped[0]?.id ?? null,
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao carregar fila de moderação:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const visible = useMemo(
     () => items.filter((item) => matchesFilters(item, filters)),
@@ -77,9 +181,6 @@ export function useModerationQueue() {
   const updateFilters = useCallback(
     (patch: Partial<QueueFilters>) => {
       const next = { ...filters, ...patch };
-
-      // A seleção acompanha o filtro: manter o item anterior deixaria o painel
-      // mostrando algo que acabou de sumir da lista.
       const stillVisible = items.filter((item) => matchesFilters(item, next));
 
       setFilters(next);
@@ -110,10 +211,6 @@ export function useModerationQueue() {
 
   const clearMarks = useCallback(() => setMarkedIds([]), []);
 
-  /**
-   * Decide o item selecionado e avança para o próximo da fila — sem isso o
-   * admin volta ao mouse a cada item, e os atalhos deixam de valer a pena.
-   */
   const decide = useCallback(
     (status: ModerationStatus): ModerationItemMock | null => {
       if (!selected) return null;
@@ -122,17 +219,27 @@ export function useModerationQueue() {
       const remaining = visible.filter((item) => item.id !== selected.id);
       const next = remaining[Math.min(index, remaining.length - 1)];
 
-      setSnapshot(items);
+      const statusCode =
+        status === "aprovado" ? 2 : status === "rejeitado" ? 3 : 1;
+
       setItems((current) =>
         current.map((item) =>
           item.id === selected.id ? { ...item, status } : item,
         ),
       );
       setSelectedId(next?.id ?? null);
+      setLastDecidedId(selected.id);
+
+      decidePlaceModerationAction(selected.id, statusCode).then((result) => {
+        if (!result.success) {
+          toast.error(result.message);
+          reload();
+        }
+      });
 
       return selected;
     },
-    [items, visible, selected],
+    [visible, selected, reload],
   );
 
   const decideMarked = useCallback(
@@ -140,24 +247,41 @@ export function useModerationQueue() {
       const count = markedIds.length;
       if (!count) return 0;
 
-      setSnapshot(items);
+      const ids = [...markedIds];
+      const statusCode =
+        status === "aprovado" ? 2 : status === "rejeitado" ? 3 : 1;
+
       setItems((current) =>
         current.map((item) =>
-          markedIds.includes(item.id) ? { ...item, status } : item,
+          ids.includes(item.id) ? { ...item, status } : item,
         ),
       );
       setMarkedIds([]);
 
+      batchDecideModerationAction(ids, statusCode).then((result) => {
+        if (!result.success) {
+          toast.error(result.message);
+          reload();
+        }
+      });
+
       return count;
     },
-    [items, markedIds],
+    [markedIds, reload],
   );
 
-  const undo = useCallback(() => {
-    if (!snapshot) return;
-    setItems(snapshot);
-    setSnapshot(null);
-  }, [snapshot]);
+  const undo = useCallback(async () => {
+    if (!lastDecidedId) return;
+
+    const result = await undoModerationDecisionAction(lastDecidedId);
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    toast.success("Decisão desfeita com sucesso.");
+    await reload();
+  }, [lastDecidedId, reload]);
 
   return {
     visible,
@@ -175,5 +299,6 @@ export function useModerationQueue() {
     undo,
     pendingCount,
     returnedCount,
+    reload,
   };
 }
