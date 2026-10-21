@@ -42,7 +42,7 @@ function InformationBadge({ icon, value, label }: InformationBadgeProps) {
  */
 export default async function ManageUsersPage() {
   const usersPromise = listUsers(
-    { page: 1, pageSize: 100 },
+    { Page: 1, PageSize: 100 },
     { next: { tags: [USERS_LIST_TAG] } },
   );
 

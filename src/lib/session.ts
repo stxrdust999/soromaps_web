@@ -36,7 +36,7 @@ export function decodeJwtClaims(
 export async function setAuthCookies(authData: {
   accessToken: string;
   refreshToken: string;
-  expiresIn: number;
+  expiresIn: number | string;
   user: {
     id: string;
     name: string;
@@ -49,12 +49,17 @@ export async function setAuthCookies(authData: {
   const cookieStore = await cookies();
   const isProduction = process.env.NODE_ENV === "production";
 
+  const maxAgeSeconds =
+    typeof authData.expiresIn === "string"
+      ? parseInt(authData.expiresIn, 10) || 3600
+      : authData.expiresIn;
+
   cookieStore.set(ACCESS_TOKEN_COOKIE, authData.accessToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: "lax",
     path: "/",
-    maxAge: authData.expiresIn,
+    maxAge: maxAgeSeconds,
   });
 
   cookieStore.set(REFRESH_TOKEN_COOKIE, authData.refreshToken, {

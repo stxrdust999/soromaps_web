@@ -22,10 +22,16 @@ export async function http<T>(
 
   /** Injects Bearer token from httpOnly cookies during server-side execution. */
   if (isServer) {
-    const { getAccessToken } = await import("@/lib/session");
-    const accessToken = await getAccessToken();
-    if (accessToken && !requestHeaders.has("Authorization"))
-      requestHeaders.set("Authorization", `Bearer ${accessToken}`);
+    try {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const token = cookieStore.get("soromaps_access_token")?.value;
+      if (token && !requestHeaders.has("Authorization")) {
+        requestHeaders.set("Authorization", `Bearer ${token}`);
+      }
+    } catch {
+      // In Client Component SSR, cookies() cannot be invoked
+    }
   }
 
   const response = await fetch(`${baseUrl}${normalizedPath}`, {

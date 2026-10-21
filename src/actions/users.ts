@@ -97,12 +97,21 @@ export async function updateUserAction(
   }
 
   try {
+    const roleValue =
+      result.data.role === "admin"
+        ? 1
+        : result.data.role === "explorer"
+          ? 0
+          : null;
+
     const response = await adminUpdateUser(id, {
-      name: result.data.name,
-      email: result.data.email,
-      role: result.data.role,
-      neighborhood: result.data.neighborhood || undefined,
-      password: result.data.password || undefined,
+      name: result.data.name ?? null,
+      email: result.data.email ?? null,
+      role: roleValue,
+      neighborhood: result.data.neighborhood ?? null,
+      password: result.data.password ?? null,
+      avatarUrl: null,
+      biography: null,
     });
 
     if (response.status !== 200) {
@@ -183,8 +192,9 @@ export async function updateCurrentUserAction(data: FormData): Promise<FormState
   try {
     const response = await updateCurrentUser({
       name,
-      neighborhood: neighborhood || undefined,
-      biography: biography || undefined,
+      neighborhood: neighborhood || null,
+      biography: biography || null,
+      avatarUrl: null,
     });
 
     if (response.status !== 200) {
