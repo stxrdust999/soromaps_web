@@ -187,9 +187,13 @@ export function useDiscover(markers: MarkerResource[]) {
     [filtered],
   );
 
-  // Sem coluna de data no marker, id decrescente é o que existe de "recente".
   const recent = useMemo(
-    () => take(filtered, (a, b) => b.marker.id - a.marker.id, RECENT_LIMIT),
+    () =>
+      take(
+        filtered,
+        (a, b) => String(b.marker.id).localeCompare(String(a.marker.id)),
+        RECENT_LIMIT,
+      ),
     [filtered],
   );
 

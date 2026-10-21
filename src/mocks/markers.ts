@@ -354,8 +354,9 @@ export const markerDetailsMocks: MarkerDetailsMock[] = [
  * @param id Id do marker.
  * @returns Detalhes fictícios correspondentes.
  */
-export function getMarkerDetailsMock(id: number): MarkerDetailsMock {
-  const index = Math.abs(id) % markerDetailsMocks.length;
+export function getMarkerDetailsMock(id: number | string): MarkerDetailsMock {
+  const numericId = typeof id === "number" ? id : (parseInt(id, 10) || id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0));
+  const index = Math.abs(numericId) % markerDetailsMocks.length;
   return markerDetailsMocks[index];
 }
 

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon, SaveIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 
-import { updateMarkerAction } from "@/actions/markers";
+import { updatePlaceAction } from "@/actions/places";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -27,9 +27,7 @@ interface MarkerEditFormProps {
 }
 
 /**
- * Edição dos campos que a API persiste. Só o nome é editável: `PUT
- * /api/markers/{id}` sobrescreve as três colunas de uma vez, e a coordenada
- * se muda arrastando o pin, não digitando.
+ * Edição dos campos do local conectada com Server Action real.
  */
 export function MarkerEditForm({ marker }: MarkerEditFormProps) {
   const form = useForm<UpdateMarkerSchema>({
@@ -40,12 +38,11 @@ export function MarkerEditForm({ marker }: MarkerEditFormProps) {
   const { isSubmitting, isDirty } = form.formState;
 
   async function onSubmitForm(data: UpdateMarkerSchema) {
-    const formData = new FormData();
-    formData.set("nome", data.nome);
-    formData.set("lat", String(data.lat));
-    formData.set("lng", String(data.lng));
-
-    const state = await updateMarkerAction(formData, marker.id);
+    const state = await updatePlaceAction(String(marker.id), {
+      name: data.nome,
+      latitude: data.lat,
+      longitude: data.lng,
+    });
 
     if (!state.success) {
       responseToast.error({

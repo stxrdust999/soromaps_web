@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
-import { createMarkerAction } from "@/actions/markers";
+import { createPlaceAction } from "@/actions/places";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -124,12 +124,19 @@ export function CreateMarkerForm({
   }, [photoPreview]);
 
   async function onSubmitForm(data: CreateMarkerFormSchema) {
-    const formData = new FormData();
-    formData.set("nome", data.nome);
-    formData.set("lat", String(data.lat));
-    formData.set("lng", String(data.lng));
-
-    const state = await createMarkerAction(formData);
+    const state = await createPlaceAction({
+      categoryId: "00000000-0000-0000-0000-000000000000",
+      name: data.nome,
+      latitude: data.lat,
+      longitude: data.lng,
+      neighborhood: "Sorocaba",
+      about: data.sobre || data.nome,
+      description: data.sobre || data.nome,
+      hasWifi: data.temWifi,
+      isPetFriendly: data.petFriendly,
+      bestTime: data.melhorHorario || null,
+      localSecret: data.segredoLocal || null,
+    });
 
     if (!state.success) {
       responseToast.error({

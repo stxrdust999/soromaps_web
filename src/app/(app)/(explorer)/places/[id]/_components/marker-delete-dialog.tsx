@@ -4,7 +4,7 @@ import { Loader2Icon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { deleteMarkerAction } from "@/actions/markers";
+import { deletePlaceAction } from "@/actions/places";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,13 +19,12 @@ import { Separator } from "@/components/ui/separator";
 import { responseToast } from "@/lib/toaster";
 
 interface MarkerDeleteDialogProps {
-  markerId: number;
+  markerId: string | number;
   markerName: string;
 }
 
 /**
- * Confirmação de exclusão do local. Em caso de sucesso volta pro mapa — a
- * página deste ponto deixa de existir.
+ * Confirmação de exclusão do local. Em caso de sucesso volta pro mapa.
  */
 export function MarkerDeleteDialog({
   markerId,
@@ -37,7 +36,7 @@ export function MarkerDeleteDialog({
 
   function handleDelete() {
     startTransition(async () => {
-      const state = await deleteMarkerAction(markerId);
+      const state = await deletePlaceAction(String(markerId));
 
       if (!state.success) {
         responseToast.error({

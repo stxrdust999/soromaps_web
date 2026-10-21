@@ -1,3 +1,8 @@
+export const PLACES_LIST_TAG = "places:list";
+export const placeShowTag = (id: string | number) => `places:${id}`;
+export const MODERATION_QUEUE_TAG = "moderation:queue";
+export const MODERATION_HISTORY_TAG = "moderation:history";
+
 export interface PlaceCategory {
   label: string;
   /** Gradiente do bloco em "Explorar por tipo" — identidade visual da categoria. */

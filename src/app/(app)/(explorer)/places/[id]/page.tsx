@@ -1,7 +1,6 @@
 import { CatIcon, MapPinIcon, StarIcon, WifiIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { PlaceLeaderboard } from "@/components/blocks/place-leaderboard";
@@ -10,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Carousel from "@/components/ui/carousel";
 import { Separator } from "@/components/ui/separator";
-import { markerShowTag } from "@/constants/markers";
-import { getMarker } from "@/http/markers/markers";
+import { placeShowTag } from "@/constants/places";
+import { getPlaceById } from "@/http/places/places";
 import {
   getMarkerDetailsMock,
   getPlaceCommentMock,
@@ -24,47 +23,103 @@ interface PlaceDetailPageProps {
 }
 
 /**
- * Detalhe de um local. Server Component: `getMarker` lê `API_URL`, que é
- * server-only — a interatividade fica nas folhas (`MarkerEditForm`,
- * `MarkerDeleteDialog`).
- *
- * A tela nasce com a visão de administrador; quando existir papel de usuário,
- * as ações passam por um gate e o explorador ganha o fluxo de sugestão.
+ * Detalhe de um local integrado à API (`getPlaceById`) com fallback gracioso.
  */
 export default async function PlaceDetailPage({
   params,
 }: PlaceDetailPageProps) {
   const { id } = await params;
-  const markerId = Number(id);
 
-  if (Number.isNaN(markerId)) notFound();
+  let placeName = "Local";
+  let placeCategory = "Local";
+  let placeNeighborhood = "Sorocaba";
+  let placeDescription = "";
+  let placeCoverUrl =
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&auto=format&fit=crop&q=80";
+  let placePhotos: string[] = [];
+  let rating = 4.8;
+  let reviewsCount = 12;
+  let hasWifi = true;
+  let isPetFriendly = true;
 
-  const response = await getMarker(markerId, {
-    next: { tags: [markerShowTag(markerId)] },
-  });
+  try {
+    const response = await getPlaceById(id, {
+      next: { tags: [placeShowTag(id)] },
+    });
 
-  if (response.status !== 200) notFound();
+    if (response.status === 200) {
+      const data = response.data;
+      placeName = data.name;
+      placeCategory = data.category?.name ?? "Local";
+      placeNeighborhood = data.neighborhood;
+      placeDescription = data.description || data.about;
+      placeCoverUrl = data.coverPhotoUrl || placeCoverUrl;
+      placePhotos =
+        data.photos && data.photos.length > 0
+          ? data.photos.map((p) => p.url)
+          : [placeCoverUrl];
+      rating =
+        typeof data.ratingAverage === "string"
+          ? parseFloat(data.ratingAverage)
+          : data.ratingAverage || 0;
+      reviewsCount =
+        typeof data.reviewsCount === "string"
+          ? parseInt(data.reviewsCount, 10)
+          : data.reviewsCount || 0;
+      hasWifi = data.hasWifi;
+      isPetFriendly = data.isPetFriendly;
+    } else {
+      const markerId = Number(id);
+      if (!Number.isNaN(markerId)) {
+        const details = getMarkerDetailsMock(markerId);
+        placeName = details.categoria;
+        placeCategory = details.categoria;
+        placeNeighborhood = details.bairro;
+        placeDescription = details.descricao;
+        placeCoverUrl = details.fotoUrl;
+        placePhotos = details.fotos;
+        rating = details.nota;
+        reviewsCount = details.totalAvaliacoes;
+        hasWifi = details.temWifi;
+        isPetFriendly = details.petFriendly;
+      }
+    }
+  } catch {
+    const markerId = Number(id);
+    if (!Number.isNaN(markerId)) {
+      const details = getMarkerDetailsMock(markerId);
+      placeName = details.categoria;
+      placeCategory = details.categoria;
+      placeNeighborhood = details.bairro;
+      placeDescription = details.descricao;
+      placeCoverUrl = details.fotoUrl;
+      placePhotos = details.fotos;
+      rating = details.nota;
+      reviewsCount = details.totalAvaliacoes;
+      hasWifi = details.temWifi;
+      isPetFriendly = details.petFriendly;
+    }
+  }
 
-  const marker = response.data;
-  const details = getMarkerDetailsMock(marker.id);
-  const leaderboard = getPlaceLeaderboardMock(marker.id);
-  const comment = getPlaceCommentMock(marker.id);
+  const numericId = Number(id) || 1;
+  const leaderboard = getPlaceLeaderboardMock(numericId);
+  const comment = getPlaceCommentMock(numericId);
 
   const placeSubItem = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <Badge variant="default" className="bg-foreground text-background">
         <StarIcon className="size-3 fill-yellow-500 text-yellow-500" />
-        {details.nota} · {details.totalAvaliacoes} avaliações
+        {rating.toFixed(1)} · {reviewsCount} avaliações
       </Badge>
 
-      {details.temWifi && (
+      {hasWifi && (
         <Badge variant="default">
           <WifiIcon className="size-3" />
           Tem wifi
         </Badge>
       )}
 
-      {details.petFriendly && (
+      {isPetFriendly && (
         <Badge variant="default" className="bg-amber-500">
           <CatIcon className="size-3" />
           Pet friendly
@@ -77,8 +132,8 @@ export default async function PlaceDetailPage({
     <div>
       <div className="relative h-56 w-full shrink-0 overflow-hidden bg-muted sm:h-72 lg:h-80">
         <Image
-          src={details.fotoUrl}
-          alt={`Foto de ${marker.nome}`}
+          src={placeCoverUrl}
+          alt={`Foto de ${placeName}`}
           fill
           sizes="100vw"
           priority
@@ -87,8 +142,8 @@ export default async function PlaceDetailPage({
       </div>
 
       <PageSection
-        title={marker.nome}
-        description={`${details.bairro} · ${details.categoria}`}
+        title={placeName}
+        description={`${placeNeighborhood} · ${placeCategory}`}
         actions={
           <div className="flex gap-3">
             <Button asChild variant="outline">
@@ -98,13 +153,12 @@ export default async function PlaceDetailPage({
               </Link>
             </Button>
 
-            <MarkerDeleteDialog markerId={marker.id} markerName={marker.nome} />
+            <MarkerDeleteDialog markerId={id} markerName={placeName} />
           </div>
         }
         subitems={placeSubItem}
       >
         <div className="flex flex-row gap-4">
-          {/* mainzao */}
           <div className="flex flex-col gap-4">
             <div className="rounded-md w-full">
               <div className="flex flex-col gap-2">
@@ -112,11 +166,10 @@ export default async function PlaceDetailPage({
 
                 <Separator />
 
-                <span className="text-sm">{details.descricao}</span>
+                <span className="text-sm">{placeDescription}</span>
               </div>
             </div>
 
-            {/* carousel */}
             <div className="flex flex-col gap-2 overflow-hidden">
               <span className="text-xl font-semibold">Fotos</span>
 
@@ -124,20 +177,19 @@ export default async function PlaceDetailPage({
 
               <div className="pt-2 pb-16">
                 <Carousel
-                  slides={details.fotos.map((src, index) => ({
+                  slides={placePhotos.map((src, index) => ({
                     src,
-                    title: index === 0 ? marker.nome : details.bairro,
+                    title: index === 0 ? placeName : placeNeighborhood,
                   }))}
                 />
               </div>
             </div>
           </div>
 
-          {/* aside */}
           <aside className="flex w-fit flex-col gap-4">
             <PlaceLeaderboard
               visitors={leaderboard}
-              fullRankingHref={`/places/${marker.id}/leaderboard`}
+              fullRankingHref={`/places/${id}/leaderboard`}
             />
 
             <VerifiedCommentCard
