@@ -1,11 +1,55 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
-import { type CategoryMock, categoriesMock } from "@/mocks/admin-categories";
+import {
+  createCategoryAction,
+  deleteCategoryAction,
+  reorderCategoriesAction,
+  toggleCategoryActiveAction,
+  updateCategoryAction,
+} from "@/actions/categories";
+import type { CategoryIconKey } from "@/constants/categories";
+import type { CategoryResponseDto } from "@/http/api.schemas";
+import { listCategories } from "@/http/categories/categories";
 import { hexDistance } from "@/utils/colors/hex-distance";
-import { slugify } from "@/utils/formatters/slugify";
 import type { CategoryFormSchema } from "@/validations/categories";
+
+/**
+ * Normaliza os tipos da API para o consumo dos componentes visuais.
+ */
+export interface CategoryViewModel {
+  id: string;
+  nome: string;
+  slug: string;
+  pontos: number;
+  novosNaSemana: number;
+  ativa: boolean;
+  ordem: number;
+  cor: string;
+  icone: CategoryIconKey;
+}
+
+/**
+ * Converte CategoryResponseDto para CategoryViewModel.
+ */
+export function mapCategoryDtoToViewModel(dto: CategoryResponseDto): CategoryViewModel {
+  return {
+    id: dto.id,
+    nome: dto.name,
+    slug: dto.slug,
+    pontos: typeof dto.placesCount === "string" ? parseInt(dto.placesCount, 10) || 0 : dto.placesCount,
+    novosNaSemana:
+      typeof dto.newPlacesThisWeekCount === "string"
+        ? parseInt(dto.newPlacesThisWeekCount, 10) || 0
+        : dto.newPlacesThisWeekCount,
+    ativa: dto.isActive,
+    ordem: typeof dto.sortOrder === "string" ? parseInt(dto.sortOrder, 10) || 1 : dto.sortOrder,
+    cor: dto.color,
+    icone: (dto.icon as CategoryIconKey) || "map-pin",
+  };
+}
 
 /**
  * Abaixo desta distância RGB dois pins deixam de se distinguir à distância no
@@ -15,17 +59,12 @@ const COLLISION_THRESHOLD = 70;
 
 /**
  * Primeira categoria com cor perto demais da informada.
- *
- * @param categories Catálogo inteiro.
- * @param color Cor a testar.
- * @param ignoreId Categoria a ignorar — a própria, ao editar.
- * @returns A categoria conflitante, ou `null`.
  */
 export function findColorCollision(
-  categories: CategoryMock[],
+  categories: CategoryViewModel[],
   color: string,
   ignoreId?: string | null,
-): CategoryMock | null {
+): CategoryViewModel | null {
   return (
     categories.find(
       (category) =>
@@ -36,42 +75,38 @@ export function findColorCollision(
 }
 
 /**
- * Garante slug único somando sufixo numérico — dois nomes parecidos gerariam
- * o mesmo slug, e slug é chave pública de filtro.
+ * Gerencia o catálogo de categorias conectado com a API e Server Actions.
  */
-function uniqueSlug(
-  categories: CategoryMock[],
-  nome: string,
-  ignoreId?: string | null,
-): string {
-  const base = slugify(nome) || "categoria";
-  const taken = new Set(
-    categories.filter((c) => c.id !== ignoreId).map((c) => c.slug),
+export function useCategories(initialCategories: CategoryResponseDto[] = []) {
+  const [categories, setCategories] = useState<CategoryViewModel[]>(() =>
+    initialCategories.map(mapCategoryDtoToViewModel).sort((a, b) => a.ordem - b.ordem),
   );
+  const [loading, setLoading] = useState(false);
 
-  if (!taken.has(base)) return base;
+  const reload = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await listCategories({ includeInactive: true });
+      if (response.status === 200 && response.data.items) {
+        setCategories(
+          response.data.items
+            .map(mapCategoryDtoToViewModel)
+            .sort((a, b) => a.ordem - b.ordem),
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao carregar categorias:", error);
+      toast.error("Não foi possível carregar as categorias.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  let suffix = 2;
-  while (taken.has(`${base}-${suffix}`)) suffix += 1;
-  return `${base}-${suffix}`;
-}
-
-/** Reescreve `ordem` como 1..n para a coluna nunca mostrar buraco. */
-function renumber(categories: CategoryMock[]): CategoryMock[] {
-  return [...categories]
-    .sort((a, b) => a.ordem - b.ordem)
-    .map((category, index) => ({ ...category, ordem: index + 1 }));
-}
-
-/**
- * Catálogo de categorias em memória. Não há API nem tabela `Categoria`, então
- * criar, editar e excluir mexem apenas neste array.
- *
- * Quando o `CategoriesController` existir, isto vira `src/http/categories` +
- * Server Actions, e o que sobra aqui é só o estado de diálogo.
- */
-export function useCategories() {
-  const [categories, setCategories] = useState<CategoryMock[]>(categoriesMock);
+  useEffect(() => {
+    if (initialCategories.length === 0) {
+      reload();
+    }
+  }, [initialCategories, reload]);
 
   const stats = useMemo(
     () => ({
@@ -83,110 +118,119 @@ export function useCategories() {
     [categories],
   );
 
-  const save = useCallback((values: CategoryFormSchema, id: string | null) => {
-    setCategories((current) => {
-      const slug = uniqueSlug(current, values.nome, id);
+  const save = useCallback(
+    async (values: CategoryFormSchema, id: string | null) => {
+      const formData = new FormData();
+      formData.set("nome", values.nome);
+      formData.set("cor", values.cor);
+      formData.set("icone", values.icone);
+      formData.set("ativa", values.ativa ? "true" : "false");
 
-      if (id) {
-        return current.map((category) =>
-          category.id === id
-            ? { ...category, ...values, slug, icone: values.icone }
-            : category,
-        );
+      const result = id
+        ? await updateCategoryAction(id, formData)
+        : await createCategoryAction(formData);
+
+      if (!result.success) {
+        toast.error(result.message);
+        return false;
       }
 
-      return [
-        ...current,
-        {
-          ...values,
-          icone: values.icone,
-          id: slug,
-          slug,
-          pontos: 0,
-          novosNaSemana: 0,
-          ordem: current.length + 1,
-        },
-      ];
-    });
-  }, []);
+      toast.success(result.message);
+      await reload();
+      return true;
+    },
+    [reload],
+  );
 
-  const duplicate = useCallback((id: string) => {
-    setCategories((current) => {
-      const source = current.find((category) => category.id === id);
-      if (!source) return current;
+  const duplicate = useCallback(
+    async (id: string) => {
+      const source = categories.find((c) => c.id === id);
+      if (!source) return;
 
-      const nome = `${source.nome} (cópia)`;
-      const slug = uniqueSlug(current, nome);
+      const formData = new FormData();
+      formData.set("nome", `${source.nome} (cópia)`);
+      formData.set("cor", source.cor);
+      formData.set("icone", source.icone);
+      formData.set("ativa", "false");
 
-      return [
-        ...current,
-        {
-          ...source,
-          id: slug,
-          nome,
-          slug,
-          pontos: 0,
-          novosNaSemana: 0,
-          // Cópia nasce inativa: publicá-la antes de trocar cor e ícone é
-          // exatamente como se cria a colisão que esta tela denuncia.
-          ativa: false,
-          ordem: current.length + 1,
-        },
-      ];
-    });
-  }, []);
+      const result = await createCategoryAction(formData);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
 
-  const toggleActive = useCallback((id: string) => {
-    setCategories((current) =>
-      current.map((category) =>
-        category.id === id ? { ...category, ativa: !category.ativa } : category,
-      ),
-    );
-  }, []);
+      toast.success("Categoria duplicada", {
+        description: "A cópia nasce inativa — ajuste cor e ícone antes.",
+      });
+      await reload();
+    },
+    [categories, reload],
+  );
 
-  const move = useCallback((id: string, delta: number) => {
-    setCategories((current) => {
-      const sorted = [...current].sort((a, b) => a.ordem - b.ordem);
-      const index = sorted.findIndex((category) => category.id === id);
+  const toggleActive = useCallback(
+    async (id: string) => {
+      const target = categories.find((c) => c.id === id);
+      if (!target) return;
+
+      const result = await toggleCategoryActiveAction(id, !target.ativa);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
+      setCategories((current) =>
+        current.map((c) => (c.id === id ? { ...c, ativa: !c.ativa } : c)),
+      );
+      toast.success("Status atualizado");
+    },
+    [categories],
+  );
+
+  const move = useCallback(
+    async (id: string, delta: number) => {
+      const sorted = [...categories].sort((a, b) => a.ordem - b.ordem);
+      const index = sorted.findIndex((c) => c.id === id);
       const target = index + delta;
 
-      if (index < 0 || target < 0 || target >= sorted.length) return current;
+      if (index < 0 || target < 0 || target >= sorted.length) return;
 
       [sorted[index], sorted[target]] = [sorted[target], sorted[index]];
-      return renumber(sorted);
-    });
-  }, []);
+      const renumbered = sorted.map((c, idx) => ({ ...c, ordem: idx + 1 }));
+      setCategories(renumbered);
 
-  /**
-   * Exclui reatribuindo os pontos. `targetId` é obrigatório sempre que a
-   * categoria tem ponto vinculado — ponto sem categoria some do filtro do app
-   * sem deixar rastro.
-   */
-  const remove = useCallback((id: string, targetId?: string) => {
-    setCategories((current) => {
-      const victim = current.find((category) => category.id === id);
-      if (!victim) return current;
-      if (victim.pontos > 0 && !targetId) return current;
+      const result = await reorderCategoriesAction(renumbered.map((c) => c.id));
+      if (!result.success) {
+        toast.error(result.message);
+        await reload();
+      }
+    },
+    [categories, reload],
+  );
 
-      return renumber(
-        current
-          .filter((category) => category.id !== id)
-          .map((category) =>
-            category.id === targetId
-              ? { ...category, pontos: category.pontos + victim.pontos }
-              : category,
-          ),
-      );
-    });
-  }, []);
+  const remove = useCallback(
+    async (id: string, targetId?: string) => {
+      const result = await deleteCategoryAction(id, targetId);
+      if (!result.success) {
+        toast.error(result.message);
+        return false;
+      }
+
+      toast.success(result.message);
+      await reload();
+      return true;
+    },
+    [reload],
+  );
 
   return {
     categories,
+    loading,
     stats,
     save,
     duplicate,
     toggleActive,
     move,
     remove,
+    reload,
   };
 }

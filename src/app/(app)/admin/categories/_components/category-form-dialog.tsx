@@ -32,13 +32,12 @@ import {
   type CategoryIconKey,
 } from "@/constants/categories";
 import { cn } from "@/lib/utils";
-import type { CategoryMock } from "@/mocks/admin-categories";
 import { slugify } from "@/utils/formatters/slugify";
 import {
   type CategoryFormSchema,
   categoryFormSchema,
 } from "@/validations/categories";
-
+import type { CategoryViewModel } from "./use-categories";
 import { CategoryPin } from "./category-pin";
 import { findColorCollision } from "./use-categories";
 
@@ -53,8 +52,8 @@ interface CategoryFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** `null` cria; categoria preenchida edita. */
-  category: CategoryMock | null;
-  categories: CategoryMock[];
+  category: CategoryViewModel | null;
+  categories: CategoryViewModel[];
   onSubmit: (values: CategoryFormSchema) => void;
 }
 

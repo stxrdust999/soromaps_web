@@ -114,3 +114,7 @@ export const CATEGORY_COLORS = [
   "#0f766e",
   "#1447e6",
 ];
+
+export const CATEGORIES_LIST_TAG = "categories:list";
+export const categoryShowTag = (id: string) => `categories:${id}`;
+

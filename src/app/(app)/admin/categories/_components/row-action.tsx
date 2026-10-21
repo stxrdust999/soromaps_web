@@ -21,18 +21,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { CategoryMock } from "@/mocks/admin-categories";
+import type { CategoryViewModel } from "./use-categories";
 
 export interface CategoryRowActions {
-  onEdit: (category: CategoryMock) => void;
+  onEdit: (category: CategoryViewModel) => void;
   onDuplicate: (id: string) => void;
   onToggleActive: (id: string) => void;
   onMove: (id: string, delta: number) => void;
-  onDelete: (category: CategoryMock) => void;
+  onDelete: (category: CategoryViewModel) => void;
 }
 
 interface CategoryRowActionProps extends CategoryRowActions {
-  category: CategoryMock;
+  category: CategoryViewModel;
   isFirst: boolean;
   isLast: boolean;
 }

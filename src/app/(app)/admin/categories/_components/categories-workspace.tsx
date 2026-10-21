@@ -8,7 +8,6 @@ import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { CategoryMock } from "@/mocks/admin-categories";
 import type { CategoryFormSchema } from "@/validations/categories";
 
 import { CategoriesTable } from "./categories-table";
@@ -16,24 +15,18 @@ import { CategoryFormDialog } from "./category-form-dialog";
 import { DeleteCategoryDialog } from "./delete-category-dialog";
 import { MapPreviewStrip } from "./map-preview-strip";
 import type { CategoryRowActions } from "./row-action";
-import { useCategories } from "./use-categories";
+import { useCategories, type CategoryViewModel } from "./use-categories";
 
 /**
- * Tela de categorias inteira. É client porque o catálogo vive em memória —
- * não existe tabela `Categoria` nem `CategoriesController`, então cada
- * operação mexe no array de `src/mocks/admin-categories.ts`.
- *
- * Quando a API existir, a listagem volta a ser Server Component com
- * `src/http/categories`, as mutações viram Server Actions e os diálogos migram
- * para rotas do slot `(app)/@modals`, como em `/admin/users`.
+ * Tela de categorias conectada com a API e Server Actions.
  */
 export function CategoriesWorkspace() {
   const { categories, stats, save, duplicate, toggleActive, move, remove } =
     useCategories();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<CategoryMock | null>(null);
-  const [deleting, setDeleting] = useState<CategoryMock | null>(null);
+  const [editing, setEditing] = useState<CategoryViewModel | null>(null);
+  const [deleting, setDeleting] = useState<CategoryViewModel | null>(null);
 
   const openCreate = useCallback(() => {
     setEditing(null);
@@ -46,40 +39,28 @@ export function CategoriesWorkspace() {
         setEditing(category);
         setFormOpen(true);
       },
-      onDuplicate: (id) => {
-        duplicate(id);
-        toast.success("Categoria duplicada", {
-          description: "A cópia nasce inativa — ajuste cor e ícone antes.",
-        });
-      },
-      onToggleActive: (id) => {
-        toggleActive(id);
-        toast.success("Status atualizado");
-      },
+      onDuplicate: duplicate,
+      onToggleActive: toggleActive,
       onMove: move,
       onDelete: setDeleting,
     }),
     [duplicate, toggleActive, move],
   );
 
-  function handleSubmit(values: CategoryFormSchema) {
-    save(values, editing?.id ?? null);
-    setFormOpen(false);
-    toast.success(editing ? "Categoria salva" : "Categoria criada");
+  async function handleSubmit(values: CategoryFormSchema) {
+    const success = await save(values, editing?.id ?? null);
+    if (success) {
+      setFormOpen(false);
+    }
   }
 
-  function handleDelete(targetId?: string) {
+  async function handleDelete(targetId?: string) {
     if (!deleting) return;
 
-    const destination = categories.find((c) => c.id === targetId);
-    remove(deleting.id, targetId);
-    setDeleting(null);
-
-    toast.success(`Categoria excluída: ${deleting.nome}`, {
-      description: destination
-        ? `${deleting.pontos.toLocaleString("pt-BR")} pontos foram para ${destination.nome}.`
-        : undefined,
-    });
+    const success = await remove(deleting.id, targetId);
+    if (success) {
+      setDeleting(null);
+    }
   }
 
   return (

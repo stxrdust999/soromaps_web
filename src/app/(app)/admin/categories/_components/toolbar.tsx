@@ -18,10 +18,10 @@ import {
 import { FilterChipsScrollArea } from "@/components/table/filter-chips-scroll-area";
 import { FilterResetButton } from "@/components/table/filter-reset-button";
 import { Button } from "@/components/ui/button";
-import type { CategoryMock } from "@/mocks/admin-categories";
 import { hasActiveFilters } from "@/utils/table/has-active-filters";
 
 import { categoryColumnsNames } from "./columns";
+import type { CategoryViewModel } from "./use-categories";
 
 const STATUS_OPTIONS: SelectFilterChipOption[] = [
   { value: "ativas", label: "Só ativas" },
@@ -35,7 +35,7 @@ const RANGE_OPTIONS: SelectFilterChipOption[] = [
 ];
 
 interface CategoriesToolbarProps {
-  table: Table<CategoryMock>;
+  table: Table<CategoryViewModel>;
 
   /**
    * Alerta de cor fica fora do `ColumnFiltersState`: ele compara a categoria
