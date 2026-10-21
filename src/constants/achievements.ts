@@ -1,3 +1,11 @@
+export const ACHIEVEMENTS_LIST_TAG = "achievements:list";
+export const achievementShowTag = (id: string) => `achievements:${id}`;
+export const MY_ACHIEVEMENTS_TAG = "users:me:achievements";
+export const MY_VISITS_TAG = "users:me:visits";
+export const MY_FAVORITES_TAG = "users:me:favorites";
+export const MY_STATS_TAG = "users:me:stats";
+export const MY_VERIFICATION_TAG = "users:me:verification";
+
 import {
   Activity,
   Award,

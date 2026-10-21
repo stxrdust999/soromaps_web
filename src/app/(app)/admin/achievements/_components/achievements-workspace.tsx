@@ -77,27 +77,28 @@ export function AchievementsWorkspace() {
         setEditing(achievement);
         setFormOpen(true);
       },
-      onDuplicate: (id) => {
-        duplicate(id);
+      onDuplicate: async (id) => {
+        await duplicate(id);
         toast.success("Conquista duplicada", {
           description: "A cópia nasce inativa — ajuste o critério antes.",
         });
       },
       onPreview: previewFromAchievement,
       onDeactivate: setDeactivating,
-      onActivate: (achievement) => {
-        setActive(achievement.id, true);
+      onActivate: async (achievement) => {
+        await setActive(achievement.id, true);
         toast.success(`Conquista ativada: ${achievement.nome}`);
       },
     }),
     [duplicate, setActive, previewFromAchievement],
   );
 
-  function handleSubmit(values: AchievementFormSchema) {
-    save(values, editing?.id ?? null);
-    setFormOpen(false);
-
-    toast.success(editing ? "Conquista salva" : "Conquista criada");
+  async function handleSubmit(values: AchievementFormSchema) {
+    const success = await save(values, editing?.id ?? null);
+    if (success) {
+      setFormOpen(false);
+      toast.success(editing ? "Conquista salva" : "Conquista criada");
+    }
   }
 
   return (
