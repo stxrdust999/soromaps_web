@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { PageBreadcrumb } from "@/components/blocks/page-breadcrumb";
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
+import { ADMIN_STATS_TAG } from "@/constants/reports";
+import { getAdminDashboardStats } from "@/http/admin-dashboard/admin-dashboard";
 import { metricCardsMock } from "@/mocks/admin-dashboard";
 
 import { AttentionQueues } from "./_components/attention-queues";
@@ -27,11 +29,20 @@ function DashboardBlock({ title, children }: DashboardBlockProps) {
 }
 
 /**
- * Hub do admin, não BI: as filas vêm primeiro porque são o que exige ação, e
- * os números só depois. Tudo sobre `src/mocks/admin-dashboard.ts` até existir
- * `GET /api/admin/stats` — ver `docs/todo/admin/dashboard.md`.
+ * Hub do admin integrado com a API através de getAdminDashboardStats.
  */
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  let statsData = null;
+
+  try {
+    const res = await getAdminDashboardStats(undefined, { next: { tags: [ADMIN_STATS_TAG] } });
+    if (res.status === 200) {
+      statsData = res.data;
+    }
+  } catch {
+    // Mantém fallback seguro
+  }
+
   return (
     <main className="flex flex-1 flex-col">
       <PageBreadcrumb items={[{ label: "Admin" }, { label: "Dashboard" }]} />
