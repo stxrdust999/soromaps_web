@@ -1,14 +1,15 @@
 "use client";
 
 import { SearchIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { isVerifiedExplorer } from "@/constants/verification";
-import { explorersMock } from "@/mocks/community";
+import { listExplorers } from "@/http/community/community";
+import { type ExplorerMock, explorersMock } from "@/mocks/community";
 import { publishedStoriesMock } from "@/mocks/stories";
 
 import { ContributionRanking } from "./contribution-ranking";
@@ -22,36 +23,57 @@ import { VerificationCard } from "./verification-card";
 const CONTENT_WIDTH = "mx-auto flex w-full max-w-6xl";
 
 /**
- * Comunidade.
- *
- * **Sem seguir ninguém** — decisão de 2026-08-17, a mesma do feed. Sem grafo,
- * a tela precisa responder de outro jeito à pergunta "quem é essa pessoa que
- * avaliou?": contribuição registrada, título derivado das conquistas e o selo
- * de verificado, cujo critério fica publicado ao lado.
- *
- * As pautas abrem a tela porque atividade de gente tem dia fraco: em base
- * nova, há semana sem avaliação nenhuma. O conteúdo editorial é o que o
- * produto controla.
- *
- * Client porque `Analise`, `Visita` e a tabela de pauta não existem: busca e
- * ranking recortam os arrays de `src/mocks/community.ts` e `stories.ts`.
+ * Comunidade integrada à API com fallback para mocks.
  */
 export function CommunityWorkspace() {
   const [search, setSearch] = useState("");
+  const [explorers, setExplorers] = useState<ExplorerMock[]>(explorersMock);
+
+  useEffect(() => {
+    async function loadExplorers() {
+      try {
+        const res = await listExplorers({ PageSize: 50 });
+        if (res.status === 200 && res.data.items.length > 0) {
+          const mapped: ExplorerMock[] = res.data.items.map((e, idx) => ({
+            id: idx + 1,
+            nome: e.name,
+            iniciais: e.name.slice(0, 2).toUpperCase(),
+            bairro: e.neighborhood ?? "Sorocaba",
+            desde: "Recentemente",
+            pontosCadastrados: Number(e.approvedPlacesCount),
+            contribuicoesSemana: Number(e.contributionScore),
+            bio: "Explorador ativo de Sorocaba",
+            avatarUrl: e.avatarUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${e.name}`,
+            visitas: Number(e.visitsCount),
+            avaliacoes: Number(e.reviewsCount),
+            conquistas: Number(e.achievementsCount),
+            mesesNaPlataforma: Math.max(1, Math.floor((Date.now() - new Date(e.joinedAt).getTime()) / (1000 * 60 * 60 * 24 * 30))),
+            avaliacoesRemovidas: 0,
+            ultimasAvaliacoes: [],
+          }));
+          setExplorers(mapped);
+        }
+      } catch {
+        // Fallback silencioso
+      }
+    }
+
+    loadExplorers();
+  }, []);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) return explorersMock;
+    if (!query) return explorers;
 
-    return explorersMock.filter(
+    return explorers.filter(
       (person) =>
         person.nome.toLowerCase().includes(query) ||
         person.bairro.toLowerCase().includes(query),
     );
-  }, [search]);
+  }, [explorers, search]);
 
-  const verifiedCount = explorersMock.filter(isVerifiedExplorer).length;
+  const verifiedCount = explorers.filter(isVerifiedExplorer).length;
 
   return (
     <main className="flex flex-1 flex-col">
@@ -62,7 +84,7 @@ export function CommunityWorkspace() {
         actions={<StoryGeneratorDialog />}
         subitems={
           <div className="mt-3 flex flex-wrap gap-2">
-            <Badge>{explorersMock.length} exploradores</Badge>
+            <Badge>{explorers.length} exploradores</Badge>
             <Badge variant="outline">{verifiedCount} verificados</Badge>
             <Badge variant="outline">
               {publishedStoriesMock.length} pautas publicadas

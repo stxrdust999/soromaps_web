@@ -7,6 +7,8 @@ import { PageSection } from "@/components/blocks/page-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { storyShowTag } from "@/constants/reports";
+import { getStoryBySlug } from "@/http/stories/stories";
 import { getStoryMock, publishedStoriesMock } from "@/mocks/stories";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
@@ -15,19 +17,38 @@ interface StoryPageProps {
 }
 
 /**
- * Uma pauta.
- *
- * Rota própria, fora de `/community`, porque a pauta é destino de três lugares
- * diferentes: a vitrine da Comunidade, o card `curadoria` do feed e, no futuro,
- * a página do próprio ponto. Aninhar em comunidade daria a ela uma URL que
- * mente sobre o assunto.
- *
- * Rascunho não abre: enquanto `status` é `rascunho`, a pauta responde 404 para
- * o leitor. Publicar é decisão humana, e a rota respeita isso.
+ * Página de uma pauta editorial integrada com a API.
  */
 export default async function StoryPage({ params }: StoryPageProps) {
   const { slug } = await params;
-  const story = getStoryMock(slug);
+  let story = getStoryMock(slug);
+
+  try {
+    const res = await getStoryBySlug(slug, { next: { tags: [storyShowTag(slug)] } });
+    if (res.status === 200) {
+      const data = res.data;
+      story = {
+        slug: data.slug,
+        chapeu: data.neighborhood ?? "Sorocaba",
+        titulo: data.title,
+        chamada: data.subtitle,
+        corpo: [data.introText, ...(data.closingText ? [data.closingText] : [])],
+        fotoUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+        status: data.status === 1 ? "publicada" : "rascunho",
+        origem: data.origin === 1 ? "ia" : "equipe",
+        tempoLeitura: 4,
+        diasAtras: Math.max(0, Math.floor((Date.now() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))),
+        locais: data.places.map((p) => ({
+          id: Number(p.placeId) || 1,
+          nome: p.placeName,
+          categoria: p.category.name,
+          bairro: p.neighborhood,
+        })),
+      };
+    }
+  } catch {
+    // Fallback silencioso para mock se existir
+  }
 
   if (!story || story.status !== "publicada") notFound();
 

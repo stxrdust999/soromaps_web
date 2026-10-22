@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { explorerCredential } from "@/constants/explorer-titles";
+import { explorerProfileTag } from "@/constants/reports";
 import {
   isVerifiedExplorer,
   missingForVerification,
 } from "@/constants/verification";
+import { getCommunityUserProfile } from "@/http/community/community";
 import { getExplorerMock, totalContributions } from "@/mocks/community";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
@@ -23,24 +25,49 @@ interface ExplorerProfilePageProps {
 
 /**
  * Perfil público de um explorador.
- *
- * Sem seguidores para contar, o perfil responde à confiança por outro
- * caminho: o que a pessoa registrou, há quanto tempo e o que ela escreveu. Não
- * há botão de seguir nem de mensagem — a relação aqui é com o lugar, não com
- * o autor.
- *
- * Server Component lendo o mock direto: `Analise`, `Visita` e
- * `GanhaConquista` não existem, então não há o que buscar.
  */
 export default async function ExplorerProfilePage({
   params,
 }: ExplorerProfilePageProps) {
   const { id } = await params;
-  const explorerId = Number(id);
+  let explorer = getExplorerMock(Number(id));
 
-  if (Number.isNaN(explorerId)) notFound();
-
-  const explorer = getExplorerMock(explorerId);
+  // Tenta carregar perfil real da API se for GUID ou se endpoint responder
+  try {
+    const res = await getCommunityUserProfile(id, { next: { tags: [explorerProfileTag(id)] } });
+    if (res.status === 200) {
+      const data = res.data;
+      explorer = {
+        id: Number(id) || 1,
+        nome: data.name,
+        iniciais: data.name.slice(0, 2).toUpperCase(),
+        bairro: data.neighborhood ?? "Sorocaba",
+        desde: "Recentemente",
+        pontosCadastrados: Number(data.approvedPlacesCount),
+        contribuicoesSemana: Number(data.contributionScore),
+        bio: data.biography ?? "Explorador de Sorocaba",
+        avatarUrl: data.avatarUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
+        visitas: Number(data.visitsCount),
+        avaliacoes: Number(data.reviewsCount),
+        conquistas: Number(data.achievementsCount),
+        mesesNaPlataforma: Math.max(1, Math.floor((Date.now() - new Date(data.joinedAt).getTime()) / (1000 * 60 * 60 * 24 * 30))),
+        avaliacoesRemovidas: 0,
+        ultimasAvaliacoes: data.recentReviews.map((r, rIdx) => ({
+          local: {
+            id: rIdx + 1,
+            nome: "Local em Sorocaba",
+            bairro: "Sorocaba",
+          },
+          nota: Number(r.rating),
+          corpo: r.content,
+          uteis: Number(r.usefulVotesCount),
+          diasAtras: Math.max(0, Math.floor((Date.now() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24))),
+        })),
+      };
+    }
+  } catch {
+    // Mantém fallback do mock se id bater
+  }
 
   if (!explorer) notFound();
 

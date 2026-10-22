@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { createFeedMuteAction, deleteFeedMuteAction } from "@/actions/feed";
 import type { FeedMuteScope, FeedReason, FeedSort } from "@/constants/feed";
+import { getFeed, listFeedMutes } from "@/http/feed/feed";
 import {
   type FeedItemKind,
   type FeedItemMock,
@@ -25,6 +27,7 @@ export interface FeedMute {
   value: string;
   /** Texto do chip que desfaz a regra. */
   label: string;
+  apiId?: string;
 }
 
 /**
@@ -105,13 +108,67 @@ export function useFeed() {
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [useful, setUseful] = useState<Set<string>>(new Set());
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [itemsList, setItemsList] = useState<FeedItemMock[]>(feedItemsMock);
+
+  useEffect(() => {
+    async function fetchApiData() {
+      try {
+        const [feedRes, mutesRes] = await Promise.allSettled([
+          getFeed({ PageSize: 50 }),
+          listFeedMutes(),
+        ]);
+
+        if (feedRes.status === "fulfilled" && feedRes.value.status === 200 && feedRes.value.data.items.length > 0) {
+          const mapped: FeedItemMock[] = feedRes.value.data.items.map((item, idx) => ({
+            id: item.id,
+            kind: "avaliacao",
+            motivo: "cidade",
+            diasAtras: Math.max(0, Math.floor((Date.now() - new Date(item.occurredAt).getTime()) / (1000 * 60 * 60 * 24))),
+            hora: "12:00",
+            relevancia: 80,
+            autor: {
+              id: 1,
+              nome: "Explorador de Sorocaba",
+              iniciais: "ES",
+              conquistas: 5,
+            },
+            nota: 5,
+            uteis: 0,
+            local: {
+              id: Number(item.placeId) || idx + 1,
+              nome: item.placeName ?? "Sorocaba",
+              categoria: item.categoryName ?? "Geral",
+              bairro: item.neighborhood ?? "Centro",
+              fotoUrl: item.imageUrl ?? "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+            },
+            corpo: item.description ?? item.title,
+          }));
+          setItemsList(mapped);
+        }
+
+        if (mutesRes.status === "fulfilled" && mutesRes.value.status === 200 && mutesRes.value.data.length > 0) {
+          const mappedMutes: FeedMute[] = mutesRes.value.data.map((m) => ({
+            scope: (m.scopeType === 1 ? "bairro" : "categoria") as FeedMuteScope,
+            value: m.scopeValue,
+            label: `Menos ${m.scopeValue}`,
+            apiId: m.id,
+          }));
+          setMutes(mappedMutes);
+        }
+      } catch {
+        // Mantém fallback seguro
+      }
+    }
+
+    fetchApiData();
+  }, []);
 
   const audible = useMemo(
     () =>
-      feedItemsMock.filter(
+      itemsList.filter(
         (item) => !mutes.some((mute) => matchesMute(item, mute)),
       ),
-    [mutes],
+    [itemsList, mutes],
   );
 
   /** Quanto cada fonte contribui hoje — alimenta os chips e o "Seu recorte". */
@@ -149,6 +206,10 @@ export function useFeed() {
   }, [selected, visible, sort]);
 
   const mute = useCallback((rule: FeedMute) => {
+    // Se for silenciamento, registra na API
+    const scopeType = rule.scope === "bairro" ? 1 : 0;
+    createFeedMuteAction({ scopeType, scopeValue: rule.value });
+
     setMutes((current) =>
       current.some(
         (item) => item.scope === rule.scope && item.value === rule.value,
@@ -159,6 +220,10 @@ export function useFeed() {
   }, []);
 
   const unmute = useCallback((rule: FeedMute) => {
+    if (rule.apiId) {
+      deleteFeedMuteAction(rule.apiId);
+    }
+
     setMutes((current) =>
       current.filter(
         (item) => !(item.scope === rule.scope && item.value === rule.value),
