@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { dismissReportsAction } from "@/actions/reports";
+import { listAdminGroupedReports } from "@/http/reports/reports";
 
 import {
   type FeedbackMock,
@@ -176,6 +179,53 @@ export function useReports() {
   const [filters, setFilters] = useState<QueueFilters>(EMPTY_FILTERS);
   const [selectedId, setSelectedId] = useState<string | null>("r1");
 
+  // Carrega casos da API quando disponível
+  const fetchReports = useCallback(async () => {
+    try {
+      const res = await listAdminGroupedReports({ PageSize: 50 });
+      if (res.status === 200 && res.data.items.length > 0) {
+        const mapped: ReportCaseMock[] = res.data.items.map((item) => {
+          const kindMap: Record<number, ReportCaseMock["alvoTipo"]> = {
+            0: "ponto",
+            1: "avaliacao",
+            2: "comentario",
+          };
+          return {
+            id: `api-report-${item.targetId}`,
+            alvoTipo: kindMap[item.target?.targetType ?? 0] ?? "ponto",
+            alvoNome: item.target?.title ?? "Conteúdo denunciado",
+            autorId: "jorge",
+            conteudo: {
+              corpo: item.target?.content ?? "",
+              local: item.target?.subtitle ?? "Sorocaba",
+            },
+            trecho: item.target?.content ?? "",
+            diasAberto: 1,
+            denunciantes: item.reasons.map((r, rIdx) => ({
+              id: rIdx + 1,
+              nome: `Denunciante ${rIdx + 1}`,
+              iniciais: "D",
+              motivo: "inapropriado" as ReportReason,
+              detalhe: `${r}`,
+              diasAtras: 1,
+              quando: "hoje",
+              diasDeConta: 30,
+            })),
+          };
+        });
+
+        setReports(mapped);
+        setSelectedId(mapped[0]?.id ?? null);
+      }
+    } catch {
+      // Mantém fallback seguro de mocks
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
   /** Mais denunciados primeiro: o caso de 6 reports pesa mais que o de 1. */
   const visible = useMemo(
     () =>
@@ -235,6 +285,12 @@ export function useReports() {
     const index = visible.findIndex((report) => report.id === selected.id);
     const remaining = visible.filter((report) => report.id !== selected.id);
     const next = remaining[Math.min(index, remaining.length - 1)];
+
+    if (selected.id.startsWith("api-report-")) {
+      const targetType = selected.alvoTipo === "ponto" ? "place" : selected.alvoTipo === "avaliacao" ? "review" : "comment";
+      const targetId = selected.id.replace("api-report-", "");
+      dismissReportsAction(targetType, targetId, "Caso encerrado pelo moderador");
+    }
 
     setReports((current) =>
       current.filter((report) => report.id !== selected.id),
