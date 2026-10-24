@@ -3,9 +3,8 @@ import Link from "next/link";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { ModerationAuthorMock } from "@/mocks/admin-moderation";
+import type { ModerationAuthorMock } from "@/types/moderation";
 
-/** Abaixo desta taxa o autor deixa de ter crédito e o ponto pede lupa. */
 const TRUSTED_RATIO = 0.6;
 
 interface AuthorCardProps {
@@ -13,14 +12,15 @@ interface AuthorCardProps {
 }
 
 /**
- * Contexto de quem enviou. A taxa de aprovação é o que decide o nível de
- * escrutínio antes mesmo de o admin ler a ficha.
+ * Contexto do autor da sugestão na fila de moderação.
  */
 export function AuthorCard({ author }: AuthorCardProps) {
-  const trusted = author.aprovados / author.enviados >= TRUSTED_RATIO;
+  const ratio = author.enviados > 0 ? author.aprovados / author.enviados : 0;
+  const trusted = ratio >= TRUSTED_RATIO;
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border p-4">
+      {/* identity - header */}
       <div className="flex items-center gap-3">
         <Avatar className="size-9">
           <AvatarFallback>{author.iniciais}</AvatarFallback>
@@ -32,6 +32,7 @@ export function AuthorCard({ author }: AuthorCardProps) {
         </div>
       </div>
 
+      {/* approval ratio - badge */}
       <div>
         <p className="text-muted-foreground mb-1 text-xs">Taxa de aprovação</p>
         <Badge variant={trusted ? "success" : "destructive"}>
@@ -39,6 +40,7 @@ export function AuthorCard({ author }: AuthorCardProps) {
         </Badge>
       </div>
 
+      {/* metadata - list */}
       <dl className="flex flex-col gap-1.5 text-sm">
         <div className="flex justify-between gap-4">
           <dt className="text-muted-foreground">Membro desde</dt>

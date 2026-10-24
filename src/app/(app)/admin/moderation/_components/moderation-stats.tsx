@@ -6,11 +6,12 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { moderationSummaryMock } from "@/mocks/admin-moderation";
 
 interface ModerationStatsProps {
   pendingCount: number;
   returnedCount: number;
+  decididosHoje: number;
+  tempoMedio: string;
 }
 
 interface StatProps {
@@ -38,12 +39,13 @@ function Stat({ label, icon, value, trailing }: StatProps) {
 }
 
 /**
- * Os quatro números do topo. O tempo médio é o que denuncia fila represada —
- * os outros três só dizem tamanho.
+ * Indicadores numéricos do topo da fila de moderação.
  */
 export function ModerationStats({
   pendingCount,
   returnedCount,
+  decididosHoje,
+  tempoMedio,
 }: ModerationStatsProps) {
   return (
     <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -72,7 +74,7 @@ export function ModerationStats({
             <CheckCircle2Icon className="size-4 text-muted-foreground" />
           </div>
         }
-        value={moderationSummaryMock.decididosHoje}
+        value={decididosHoje}
       />
       <Stat
         label="Tempo médio de decisão"
@@ -81,12 +83,8 @@ export function ModerationStats({
             <TimerIcon className="size-4 text-muted-foreground" />
           </div>
         }
-        value={moderationSummaryMock.tempoMedio}
-        trailing={
-          <Badge variant="warning">
-            {moderationSummaryMock.variacaoTempoMedio}
-          </Badge>
-        }
+        value={tempoMedio}
+        trailing={<Badge variant="outline">SLA 48h</Badge>}
       />
     </div>
   );

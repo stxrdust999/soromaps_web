@@ -10,13 +10,12 @@ import {
 } from "@/actions/moderation";
 import type { ModerationPlaceItemDto } from "@/http/api.schemas";
 import { listModerationPlaces } from "@/http/moderation/moderation";
-import {
-  type ModerationItemMock,
-  type ModerationStatus,
-  moderationQueueMock,
-} from "@/mocks/admin-moderation";
+import type {
+  ModerationAuthorMock,
+  ModerationItemMock,
+  ModerationStatus,
+} from "@/types/moderation";
 
-/** Filtro de categoria em "todas" — sentinela, porque `Select` não aceita `""`. */
 export const ALL_CATEGORIES = "todas";
 
 interface QueueFilters {
@@ -25,10 +24,25 @@ interface QueueFilters {
   soComAlerta: boolean;
 }
 
+function parseNumeric(
+  value: number | string | null | undefined,
+  fallback = 0,
+): number {
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
 /**
- * Converte item da API para a representação consumida pelos componentes.
+ * Converte um `ModerationPlaceItemDto` da API para o contrato visual `ModerationItemMock`.
  */
-function mapDtoToItemMock(dto: ModerationPlaceItemDto): ModerationItemMock {
+export function mapDtoToItemMock(
+  dto: ModerationPlaceItemDto,
+): ModerationItemMock {
   const statusStr: ModerationStatus =
     dto.status === 2
       ? "aprovado"
@@ -39,29 +53,64 @@ function mapDtoToItemMock(dto: ModerationPlaceItemDto): ModerationItemMock {
           : "pendente";
 
   const diffMs = Date.now() - new Date(dto.createdAt).getTime();
-  const diasNaFila = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const diasNaFila = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  const enviados = Math.max(
+    1,
+    parseNumeric(dto.author?.totalSubmittedPlaces, 1),
+  );
+  const aprovados = parseNumeric(dto.author?.approvedPlacesCount, 0);
+  const avaliacoesEscritas = parseNumeric(dto.author?.reviewsWrittenCount, 0);
+  const authorName = dto.author?.name ?? "Explorador";
+  const initials =
+    authorName
+      .split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "EX";
+
+  const autor: ModerationAuthorMock = {
+    id: dto.author?.id ?? `author-${dto.id}`,
+    nome: authorName,
+    iniciais: initials,
+    nivel: enviados >= 5 ? "Guia local" : "Explorador",
+    enviados,
+    aprovados,
+    membroDesde: dto.author?.joinedAt
+      ? new Date(dto.author.joinedAt).toLocaleDateString("pt-BR", {
+          month: "short",
+          year: "numeric",
+        })
+      : "recentemente",
+    avaliacoesEscritas,
+  };
 
   const dup =
     dto.possibleDuplicates && dto.possibleDuplicates.length > 0
       ? {
+          id: dto.possibleDuplicates[0].id,
           nome: dto.possibleDuplicates[0].name,
-          distanciaMetros:
-            typeof dto.possibleDuplicates[0].distanceMeters === "string"
-              ? parseInt(dto.possibleDuplicates[0].distanceMeters, 10)
-              : dto.possibleDuplicates[0].distanceMeters,
+          distanciaMetros: parseNumeric(
+            dto.possibleDuplicates[0].distanceMeters,
+            0,
+          ),
           similaridadeNome: 85,
           comparacao: [
             {
               label: "Nome",
               emAnalise: dto.name,
               existente: dto.possibleDuplicates[0].name,
-              igual: dto.name.toLowerCase() === dto.possibleDuplicates[0].name.toLowerCase(),
+              igual:
+                dto.name.toLowerCase() ===
+                dto.possibleDuplicates[0].name.toLowerCase(),
             },
             {
               label: "Bairro",
               emAnalise: dto.neighborhood,
               existente: dto.possibleDuplicates[0].neighborhood,
-              igual: dto.neighborhood === dto.possibleDuplicates[0].neighborhood,
+              igual:
+                dto.neighborhood === dto.possibleDuplicates[0].neighborhood,
             },
           ],
         }
@@ -74,16 +123,16 @@ function mapDtoToItemMock(dto: ModerationPlaceItemDto): ModerationItemMock {
     bairro: dto.neighborhood,
     diasNaFila,
     fotos: dto.photos.length,
+    photoUrls: dto.photos.map((photo) => photo.url),
     status: statusStr,
-    autorId: "ana",
-    autorNovo:
-      (dto.author
-        ? typeof dto.author.totalSubmittedPlaces === "string"
-          ? parseInt(dto.author.totalSubmittedPlaces, 10)
-          : dto.author.totalSubmittedPlaces
-        : 0) <= 1,
+    autor,
+    autorNovo: enviados <= 1,
     duplicata: dup,
-    vizinhos: [],
+    vizinhos: (dto.possibleDuplicates ?? []).map((_, index) => ({
+      x: 0.35 + (index * 0.21) % 0.45,
+      y: 0.3 + (index * 0.17) % 0.45,
+      suspeito: index === 0,
+    })),
     campos: {
       nome: dto.name,
       categoria: dto.category.name,
@@ -100,14 +149,15 @@ function mapDtoToItemMock(dto: ModerationPlaceItemDto): ModerationItemMock {
 }
 
 /**
- * Item merece atenção antes dos outros: duplicata suspeita, ficha incompleta
- * ou autor sem histórico. Sem alerta = candidato a aprovação rápida.
+ * Verifica se o item na fila possui alerta (duplicata, incompleto ou autor novo).
  */
 export function hasAlert(item: ModerationItemMock): boolean {
   return Boolean(item.duplicata || isIncomplete(item) || item.autorNovo);
 }
 
-/** Ficha abaixo do mínimo publicável — devolve, não rejeita. */
+/**
+ * Verifica se a ficha do ponto está incompleta.
+ */
 export function isIncomplete(item: ModerationItemMock): boolean {
   return !item.campos.descricao || item.fotos === 0;
 }
@@ -125,11 +175,13 @@ function matchesFilters(
 }
 
 /**
- * Estado da fila de moderação integrado à API real com fallback para os mocks.
+ * Estado da fila de moderação conectado à API e Server Actions.
  */
-export function useModerationQueue() {
-  const [items, setItems] = useState<ModerationItemMock[]>(moderationQueueMock);
-  const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
+export function useModerationQueue(initialItems: ModerationItemMock[] = []) {
+  const [items, setItems] = useState<ModerationItemMock[]>(initialItems);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialItems[0]?.id ?? null,
+  );
   const [markedIds, setMarkedIds] = useState<string[]>([]);
   const [lastDecidedId, setLastDecidedId] = useState<string | null>(null);
 
@@ -139,6 +191,15 @@ export function useModerationQueue() {
     soComAlerta: false,
   });
 
+  useEffect(() => {
+    setItems(initialItems);
+    setSelectedId((current) =>
+      current && initialItems.some((item) => item.id === current)
+        ? current
+        : initialItems[0]?.id ?? null,
+    );
+  }, [initialItems]);
+
   const reload = useCallback(async () => {
     try {
       const response = await listModerationPlaces({
@@ -146,15 +207,11 @@ export function useModerationQueue() {
         PageSize: 50,
       });
 
-      if (
-        response.status === 200 &&
-        response.data.items &&
-        response.data.items.length > 0
-      ) {
+      if (response.status === 200 && response.data.items) {
         const mapped = response.data.items.map(mapDtoToItemMock);
         setItems(mapped);
         setSelectedId((current) =>
-          current && mapped.some((m) => m.id === current)
+          current && mapped.some((item) => item.id === current)
             ? current
             : mapped[0]?.id ?? null,
         );
@@ -164,10 +221,6 @@ export function useModerationQueue() {
     }
   }, []);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
   const visible = useMemo(
     () => items.filter((item) => matchesFilters(item, filters)),
     [items, filters],
@@ -175,8 +228,12 @@ export function useModerationQueue() {
 
   const selected = visible.find((item) => item.id === selectedId) ?? null;
 
-  const pendingCount = items.filter((i) => i.status === "pendente").length;
-  const returnedCount = items.filter((i) => i.status === "devolvido").length;
+  const pendingCount = items.filter(
+    (item) => item.status === "pendente",
+  ).length;
+  const returnedCount = items.filter(
+    (item) => item.status === "devolvido",
+  ).length;
 
   const updateFilters = useCallback(
     (patch: Partial<QueueFilters>) => {
@@ -212,7 +269,11 @@ export function useModerationQueue() {
   const clearMarks = useCallback(() => setMarkedIds([]), []);
 
   const decide = useCallback(
-    (status: ModerationStatus): ModerationItemMock | null => {
+    (
+      status: ModerationStatus,
+      reason?: string | null,
+      feedbackNote?: string | null,
+    ): ModerationItemMock | null => {
       if (!selected) return null;
 
       const index = visible.findIndex((item) => item.id === selected.id);
@@ -230,7 +291,12 @@ export function useModerationQueue() {
       setSelectedId(next?.id ?? null);
       setLastDecidedId(selected.id);
 
-      decidePlaceModerationAction(selected.id, statusCode).then((result) => {
+      decidePlaceModerationAction(
+        selected.id,
+        statusCode,
+        reason,
+        feedbackNote,
+      ).then((result) => {
         if (!result.success) {
           toast.error(result.message);
           reload();

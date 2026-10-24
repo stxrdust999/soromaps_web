@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageSection } from "@/components/blocks/page-section";
@@ -10,20 +10,29 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import type { getAdminDashboardStatsResponse } from "@/http/admin-dashboard/admin-dashboard";
+import type { listCategoriesResponse } from "@/http/categories/categories";
+import type {
+  listModerationHistoryResponse,
+  listModerationPlacesResponse,
+} from "@/http/moderation/moderation";
 import { cn } from "@/lib/utils";
-import {
-  type ModerationStatus,
-  moderationAuthorsMock,
-  moderationSummaryMock,
-} from "@/mocks/admin-moderation";
+import type {
+  ModerationDecisionMock,
+  ModerationItemMock,
+  ModerationStatus,
+} from "@/types/moderation";
 
 import { DuplicateDialog } from "./duplicate-dialog";
-import { HistoryTable } from "./history-table";
+import { HistoryTable, mapDecisionDtoToView } from "./history-table";
 import { ModerationStats } from "./moderation-stats";
 import { PointReview } from "./point-review";
 import { QueuePanel } from "./queue-panel";
 import { RejectDialog } from "./reject-dialog";
-import { useModerationQueue } from "./use-moderation-queue";
+import {
+  mapDtoToItemMock,
+  useModerationQueue,
+} from "./use-moderation-queue";
 
 type WorkspaceTab = "fila" | "historico";
 type OpenDialog = "rejeicao" | "duplicata" | null;
@@ -33,17 +42,60 @@ const TABS: { value: WorkspaceTab; label: string }[] = [
   { value: "historico", label: "Histórico" },
 ];
 
+interface ModerationWorkspaceProps {
+  promises: {
+    queuePromise: Promise<listModerationPlacesResponse>;
+    historyPromise: Promise<listModerationHistoryResponse>;
+    categoriesPromise: Promise<listCategoriesResponse>;
+    statsPromise: Promise<getAdminDashboardStatsResponse>;
+  };
+}
+
 /**
- * Toda a tela de moderação. É client porque o trabalho é interação pura —
- * seleção, filtro, atalho de teclado — e porque não existe API para decidir:
- * aprovar/devolver/rejeitar só mexem no array local de
- * `src/mocks/admin-moderation.ts`.
- *
- * Quando `markers` ganhar `status`, o estado vira Server Actions e este
- * componente encolhe para o que de fato é local: seleção e filtros.
+ * Área de trabalho de moderação integrada à API via Streaming SSR (`use()` + `useMemo()`).
  */
-export function ModerationWorkspace() {
-  const queue = useModerationQueue();
+export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
+  const queueResponse = use(promises.queuePromise);
+  const historyResponse = use(promises.historyPromise);
+  const categoriesResponse = use(promises.categoriesPromise);
+  const statsResponse = use(promises.statsPromise);
+
+  const initialQueueItems = useMemo<ModerationItemMock[]>(() => {
+    if (queueResponse.status === 200 && queueResponse.data.items)
+      return queueResponse.data.items.map(mapDtoToItemMock);
+    return [];
+  }, [queueResponse]);
+
+  const initialHistory = useMemo<ModerationDecisionMock[]>(() => {
+    if (historyResponse.status === 200 && historyResponse.data.items)
+      return historyResponse.data.items.map(mapDecisionDtoToView);
+    return [];
+  }, [historyResponse]);
+
+  const categoryNames = useMemo<string[]>(() => {
+    if (categoriesResponse.status === 200 && categoriesResponse.data.items)
+      return categoriesResponse.data.items.map((category) => category.name);
+    return [];
+  }, [categoriesResponse]);
+
+  const summaryStats = useMemo(() => {
+    const todayString = new Date().toLocaleDateString("pt-BR");
+    const decididosHoje = initialHistory.filter(
+      (decision) => decision.quando === todayString,
+    ).length;
+    const avgHours =
+      statsResponse.status === 200
+        ? Number(statsResponse.data.kpis?.averageModerationTimeHours ?? 0)
+        : 0;
+    const tempoMedio =
+      avgHours >= 24
+        ? `${Math.floor(avgHours / 24)}d ${Math.round(avgHours % 24)}h`
+        : `${Math.max(1, Math.round(avgHours))}h`;
+
+    return { decididosHoje, tempoMedio };
+  }, [initialHistory, statsResponse]);
+
+  const queue = useModerationQueue(initialQueueItems);
   const [tab, setTab] = useState<WorkspaceTab>("fila");
   const [dialog, setDialog] = useState<OpenDialog>(null);
 
@@ -59,8 +111,13 @@ export function ModerationWorkspace() {
   );
 
   const runDecision = useCallback(
-    (status: ModerationStatus, verb: string) => {
-      const item = decide(status);
+    (
+      status: ModerationStatus,
+      verb: string,
+      reason?: string | null,
+      feedbackNote?: string | null,
+    ) => {
+      const item = decide(status, reason, feedbackNote);
       if (item) announce(`${verb}: ${item.nome}`);
     },
     [decide, announce],
@@ -75,7 +132,6 @@ export function ModerationWorkspace() {
     [decideMarked, announce],
   );
 
-  // Fila é trabalho repetitivo: sem teclado o admin volta ao mouse a cada item.
   useEffect(() => {
     if (tab !== "fila" || dialog) return;
 
@@ -114,6 +170,7 @@ export function ModerationWorkspace() {
 
   return (
     <>
+      {/* header - section */}
       <PageSection
         title="Moderação"
         description="Fila de aprovação de pontos enviados pela comunidade"
@@ -141,10 +198,13 @@ export function ModerationWorkspace() {
           <ModerationStats
             pendingCount={queue.pendingCount}
             returnedCount={queue.returnedCount}
+            decididosHoje={summaryStats.decididosHoje}
+            tempoMedio={summaryStats.tempoMedio}
           />
         }
       />
 
+      {/* workspace - panels */}
       {tab === "fila" ? (
         <ResizablePanelGroup
           orientation="horizontal"
@@ -153,6 +213,8 @@ export function ModerationWorkspace() {
           <ResizablePanel defaultSize="26%" minSize="300px" maxSize="40%">
             <QueuePanel
               items={queue.visible}
+              categories={categoryNames}
+              tempoMedio={summaryStats.tempoMedio}
               selectedId={queue.selectedId}
               markedIds={queue.markedIds}
               filters={queue.filters}
@@ -172,7 +234,7 @@ export function ModerationWorkspace() {
               {selected ? (
                 <PointReview
                   item={selected}
-                  author={moderationAuthorsMock[selected.autorId]}
+                  author={selected.autor}
                   onApprove={() => runDecision("aprovado", "Ponto aprovado")}
                   onReturn={() =>
                     runDecision("devolvido", "Devolvido ao autor")
@@ -185,7 +247,7 @@ export function ModerationWorkspace() {
                   <p className="font-semibold">Nada para revisar</p>
                   <p className="text-muted-foreground text-sm">
                     Toda a fila foi decidida. Tempo médio nesta semana:{" "}
-                    {moderationSummaryMock.tempoMedio}.
+                    {summaryStats.tempoMedio}.
                   </p>
                 </div>
               )}
@@ -194,7 +256,7 @@ export function ModerationWorkspace() {
         </ResizablePanelGroup>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto border-t pt-4">
-          <HistoryTable />
+          <HistoryTable initialHistory={initialHistory} />
         </div>
       )}
 
@@ -203,9 +265,14 @@ export function ModerationWorkspace() {
           open={dialog === "rejeicao"}
           onOpenChange={(open) => setDialog(open ? "rejeicao" : null)}
           pointName={selected.nome}
-          onConfirm={(reason) => {
+          onConfirm={(reason, note) => {
             setDialog(null);
-            runDecision("rejeitado", `Ponto rejeitado (${reason})`);
+            runDecision(
+              "rejeitado",
+              `Ponto rejeitado (${reason})`,
+              reason,
+              note ?? null,
+            );
           }}
         />
       )}
@@ -221,6 +288,7 @@ export function ModerationWorkspace() {
             runDecision(
               "rejeitado",
               `Mesclado em ${selected.duplicata?.nome ?? "ponto existente"}`,
+              "Duplicata",
             );
           }}
           onKeepBoth={() => {

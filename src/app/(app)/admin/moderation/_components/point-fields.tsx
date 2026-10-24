@@ -3,9 +3,8 @@ import {
   countFilledFields,
   MODERATION_FIELDS,
   type ModerationFieldsMock,
-} from "@/mocks/admin-moderation";
+} from "@/types/moderation";
 
-/** Abaixo disto a ficha não sustenta uma página de local decente. */
 const MINIMUM_FIELDS = 7;
 
 interface PointFieldsProps {
@@ -13,8 +12,7 @@ interface PointFieldsProps {
 }
 
 /**
- * Ficha do ponto. Campo vazio aparece como "não informado" em vez de sumir —
- * é o que deixa visível a diferença entre ponto ruim e ponto incompleto.
+ * Ficha completa do ponto em análise na moderação.
  */
 export function PointFields({ campos }: PointFieldsProps) {
   const filled = countFilledFields(campos);
@@ -22,6 +20,7 @@ export function PointFields({ campos }: PointFieldsProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* header - status */}
       <div className="flex items-baseline justify-between gap-4">
         <h3 className="font-heading font-semibold">Ficha do ponto</h3>
         <span className="text-muted-foreground text-xs">
@@ -29,6 +28,7 @@ export function PointFields({ campos }: PointFieldsProps) {
         </span>
       </div>
 
+      {/* fields - list */}
       <dl>
         {MODERATION_FIELDS.map(({ key, label }, index) => (
           <div
@@ -51,6 +51,7 @@ export function PointFields({ campos }: PointFieldsProps) {
         ))}
       </dl>
 
+      {/* completeness - bar */}
       <div className="flex flex-col gap-1.5 px-2.5">
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground text-sm">Completude</span>

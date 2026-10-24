@@ -1,4 +1,4 @@
-import type { MapNeighborMock } from "@/mocks/admin-moderation";
+import type { MapNeighborMock } from "@/types/moderation";
 
 const WIDTH = 360;
 const HEIGHT = 212;
@@ -9,11 +9,6 @@ interface NeighborhoodMapProps {
 
 /**
  * Recorte esquemático da vizinhança do ponto em julgamento.
- *
- * Não é MapLibre de propósito: aqui não se navega, só se responde "tem coisa
- * colada neste pin?". Um mapa real por item custaria estilo, tiles e uma
- * instância por seleção para entregar a mesma resposta. As ruas são
- * decorativas; só os pins carregam dado.
  */
 export function NeighborhoodMap({ neighbors }: NeighborhoodMapProps) {
   return (
@@ -47,8 +42,8 @@ export function NeighborhoodMap({ neighbors }: NeighborhoodMapProps) {
         className="stroke-primary/40"
       />
 
-      {neighbors.map((neighbor) => (
-        <g key={`${neighbor.x}-${neighbor.y}`}>
+      {neighbors.map((neighbor, index) => (
+        <g key={`${neighbor.x}-${neighbor.y}-${index}`}>
           <circle
             cx={neighbor.x * WIDTH}
             cy={neighbor.y * HEIGHT}

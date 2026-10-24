@@ -15,22 +15,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  REJECTION_REASONS,
-  type RejectionReason,
-} from "@/mocks/admin-moderation";
+import { REJECTION_REASONS, type RejectionReason } from "@/types/moderation";
 
 interface RejectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pointName: string;
-  onConfirm: (reason: RejectionReason) => void;
+  onConfirm: (reason: RejectionReason, note?: string) => void;
 }
 
 /**
- * Rejeição com motivo de lista fechada. Texto livre não vira métrica de fila
- * nem mensagem decente para quem enviou — a observação existe só para o que a
- * lista não cobre.
+ * Rejeição de ponto com motivo padronizado.
  */
 export function RejectDialog({
   open,
@@ -39,6 +34,7 @@ export function RejectDialog({
   onConfirm,
 }: RejectDialogProps) {
   const [reason, setReason] = useState<RejectionReason>(REJECTION_REASONS[0]);
+  const [note, setNote] = useState("");
   const [notify, setNotify] = useState(true);
 
   return (
@@ -79,6 +75,8 @@ export function RejectDialog({
             </Label>
             <Textarea
               id="rejection-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
               placeholder="Contexto para o autor ou para o histórico interno."
               className="min-h-17"
             />
@@ -97,7 +95,10 @@ export function RejectDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button variant="destructive" onClick={() => onConfirm(reason)}>
+          <Button
+            variant="destructive"
+            onClick={() => onConfirm(reason, note || undefined)}
+          >
             Rejeitar ponto
           </Button>
         </DialogFooter>
