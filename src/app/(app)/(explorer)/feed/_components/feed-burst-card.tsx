@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { StarRating } from "@/components/blocks/star-rating";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import type { FeedBurstItem } from "@/mocks/feed";
+import type { FeedBurstItem } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { FeedPlaceLink, FeedSaveButton } from "./feed-actions";
@@ -13,7 +13,6 @@ import { FeedCardFrame, type FeedCardHandlers } from "./feed-card-frame";
 import { FeedEventIcon } from "./feed-event-icon";
 import type { FeedMute } from "./use-feed";
 
-/** Rostos mostrados antes do "+N". Acima disso a pilha vira mancha. */
 const FACES_LIMIT = 4;
 
 interface FeedBurstCardProps {
@@ -23,12 +22,7 @@ interface FeedBurstCardProps {
 }
 
 /**
- * Rajada de atividade num lugar, já agregada.
- *
- * É o card que impede o feed de virar spam do lugar mais movimentado do dia:
- * quatro avaliações do mesmo café numa tarde são um evento, não quatro. O que
- * interessa aqui é o volume e a média — quem quiser ler uma a uma abre o
- * local.
+ * Rajada de atividade num local agregada no feed.
  */
 export function FeedBurstCard({ item, mutes, handlers }: FeedBurstCardProps) {
   const isReviews = item.tipo === "avaliacoes";

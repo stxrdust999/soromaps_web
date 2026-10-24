@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface FeedPlaceLinkProps {
-  placeId: number;
+  placeId: string;
   label?: string;
 }
 
-/** Leva ao detalhe do lugar — o destino padrão de qualquer item do feed. */
+/**
+ * Link direto para o detalhe de um local a partir de um card do feed.
+ */
 export function FeedPlaceLink({
   placeId,
   label = "Ver local",
@@ -32,11 +34,7 @@ interface FeedSaveButtonProps {
 }
 
 /**
- * Salvar o lugar.
- *
- * É a única "assinatura" que o feed oferece, e ela é de lugar, não de pessoa:
- * salvar aqui é o que faz o próximo movimento daquele ponto voltar pelo motivo
- * `salvo`. Vira `Favorita` quando a tabela existir.
+ * Botão para acompanhar/favoritar um local no feed.
  */
 export function FeedSaveButton({ saved, onToggle }: FeedSaveButtonProps) {
   return (
@@ -60,12 +58,7 @@ interface FeedUsefulButtonProps {
 }
 
 /**
- * Reação de utilidade.
- *
- * "Útil" em vez de "curtir" de propósito: a pergunta que o produto quer
- * responder é se a dica ajudou alguém a decidir, e é esse contador que pode
- * ordenar avaliação na página do lugar. Curtida mede simpatia pelo autor —
- * exatamente o eixo social que este feed não tem.
+ * Botão de reação de utilidade em avaliações do feed.
  */
 export function FeedUsefulButton({
   count,

@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import type { FeedNewPlaceItem } from "@/mocks/feed";
+import type { FeedNewPlaceItem } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { FeedPlaceLink, FeedSaveButton } from "./feed-actions";
@@ -20,11 +20,7 @@ interface FeedNewPlaceCardProps {
 }
 
 /**
- * Ponto novo aprovado no mapa.
- *
- * Chega ao feed pela moderação, não pelo cadastro: o item nasce quando o ponto
- * passa a existir para todo mundo. Por isso o destaque é o lugar, e quem
- * cadastrou aparece como crédito na linha de apoio.
+ * Ponto novo aprovado no mapa exibido no feed.
  */
 export function FeedNewPlaceCard({
   item,

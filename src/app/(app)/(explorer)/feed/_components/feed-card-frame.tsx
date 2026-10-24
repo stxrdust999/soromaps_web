@@ -22,27 +22,20 @@ import type { FeedReason } from "@/constants/feed";
 import { FeedReasonBadge } from "./feed-reason-badge";
 import type { FeedMute } from "./use-feed";
 
-/**
- * Interações que o despachante repassa a todo card, para o item não precisar
- * conhecer o hook — o card recebe o estado já resolvido para o seu id.
- */
 export interface FeedCardHandlers {
   onMute: (rule: FeedMute) => void;
-  isSaved: (placeId: number) => boolean;
-  onSave: (placeId: number) => void;
-  isUseful: (itemId: string) => boolean;
-  onUseful: (itemId: string) => void;
+  isSaved: (placeId: string) => boolean;
+  onSave: (placeId: string) => void;
+  isUseful: (reviewId: string) => boolean;
+  onUseful: (reviewId: string, placeId: string) => void;
 }
 
 interface FeedCardFrameProps {
-  /** Avatar do autor ou disco de ícone do evento. */
   leading: ReactNode;
   title: ReactNode;
-  /** Linha de apoio: lugar, bairro e quando aconteceu. */
   meta: ReactNode;
   reason: FeedReason;
   reasonDetail?: string;
-  /** Regras oferecidas no "menos disso" deste card. */
   mutes: FeedMute[];
   onMute: (rule: FeedMute) => void;
   children?: ReactNode;
@@ -52,9 +45,6 @@ interface FeedCardFrameProps {
 /**
  * Moldura comum dos itens do feed: cabeçalho com autor/evento, selo de motivo,
  * menu de ajuste e rodapé de ações.
- *
- * Existe para o motivo e o "menos disso" serem obrigatórios por construção —
- * card novo que esqueça de dizer por que está ali não compila.
  */
 export function FeedCardFrame({
   leading,
@@ -69,6 +59,7 @@ export function FeedCardFrame({
 }: FeedCardFrameProps) {
   return (
     <Card size="sm" className="gap-3">
+      {/* header - metadata */}
       <CardHeader className="flex flex-row items-start gap-3">
         {leading}
 
@@ -121,9 +112,10 @@ export function FeedCardFrame({
         </div>
       </CardHeader>
 
-      {/* pl-17 = padding do card + avatar + gap: alinha com o texto do título. */}
+      {/* body - content */}
       {children && <CardContent className="pl-17">{children}</CardContent>}
 
+      {/* actions - footer */}
       {footer && (
         <CardFooter className="flex-wrap gap-1 pl-17 text-muted-foreground">
           {footer}

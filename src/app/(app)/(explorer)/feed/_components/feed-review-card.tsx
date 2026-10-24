@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { StarRating } from "@/components/blocks/star-rating";
-import type { FeedReviewItem } from "@/mocks/feed";
+import type { FeedReviewItem } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import {
@@ -23,11 +23,7 @@ interface FeedReviewCardProps {
 }
 
 /**
- * Avaliação no feed — o item que carrega a tese do produto: a opinião de
- * alguém da cidade sobre um lugar da cidade.
- *
- * Mostra o texto inteiro em vez de cortar em duas linhas: dica de local é
- * curta por natureza, e "ver mais" só serviria para trocar leitura por clique.
+ * Avaliação de explorador exibida no feed.
  */
 export function FeedReviewCard({ item, mutes, handlers }: FeedReviewCardProps) {
   return (
@@ -58,8 +54,8 @@ export function FeedReviewCard({ item, mutes, handlers }: FeedReviewCardProps) {
         <>
           <FeedUsefulButton
             count={item.uteis}
-            marked={handlers.isUseful(item.id)}
-            onToggle={() => handlers.onUseful(item.id)}
+            marked={handlers.isUseful(item.reviewId)}
+            onToggle={() => handlers.onUseful(item.reviewId, item.local.id)}
           />
           <FeedSaveButton
             saved={handlers.isSaved(item.local.id)}

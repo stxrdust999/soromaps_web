@@ -3,7 +3,7 @@
 import { MedalIcon } from "lucide-react";
 import Link from "next/link";
 
-import type { FeedMilestoneItem } from "@/mocks/feed";
+import type { FeedMilestoneItem } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { FeedPlaceLink, FeedSaveButton } from "./feed-actions";
@@ -18,12 +18,7 @@ interface FeedMilestoneCardProps {
 }
 
 /**
- * Marco de um lugar — cem avaliações, liderança de bairro, recorde de manhã.
- *
- * O sujeito aqui é o ponto, não uma pessoa, e é o tipo de item que só um
- * produto de mapa tem: nenhuma rede social consegue dizer "este lugar virou o
- * mais bem avaliado do seu bairro". É a resposta mais direta ao feed sem
- * grafo — conteúdo que nasce do acúmulo, não de quem você segue.
+ * Marco histórico de um local no feed.
  */
 export function FeedMilestoneCard({
   item,

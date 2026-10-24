@@ -1,28 +1,56 @@
+import { Suspense } from "react";
+
 import {
   MapDrawerExpanded,
   MapDrawerLayout,
 } from "@/components/blocks/map-drawer-layout";
 import { SiteFooter } from "@/components/blocks/site-footer";
-import { MARKERS_LIST_TAG } from "@/constants/markers";
-import { getMarkers } from "@/http/markers/markers";
+import { PLACES_LIST_TAG } from "@/constants/places";
+import { listPlaces } from "@/http/places/places";
 
-import { FeedNearbySection } from "./_components/feed/feed-nearby-section";
-import { FeedTrendingSection } from "./_components/feed/feed-trending-section";
+import { HomeFeedContent } from "./_components/home-feed-content";
+import { HomeFeedSkeleton } from "./_components/home-feed-skeleton";
 import { HomeMapLayers } from "./_components/home-map-layers";
 import { HomePanelHeader } from "./_components/home-panel-header";
 
-export default async function HomePage() {
-  const response = await getMarkers({ next: { tags: [MARKERS_LIST_TAG] } });
-  const markers = response.status === 200 ? response.data : [];
+interface HomePageProps {
+  searchParams?: Promise<{
+    lat?: string;
+    lng?: string;
+    placeId?: string;
+  }>;
+}
+
+/**
+ * Página inicial do explorador com mapa interativo e trilhas em streaming via Suspense.
+ */
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const query = searchParams ? await searchParams : {};
+  const lat = query.lat ? Number.parseFloat(query.lat) : undefined;
+  const lng = query.lng ? Number.parseFloat(query.lng) : undefined;
+
+  const initialViewport =
+    lat !== undefined && lng !== undefined && !Number.isNaN(lat) && !Number.isNaN(lng)
+      ? { center: [lng, lat] as [number, number], zoom: 17 }
+      : undefined;
+
+  const promises = {
+    placesPromise: listPlaces(
+      { PageSize: 50 },
+      { next: { tags: [PLACES_LIST_TAG] } },
+    ),
+  };
 
   return (
-    <MapDrawerLayout map={<HomeMapLayers />}>
+    <MapDrawerLayout
+      map={<HomeMapLayers />}
+      initialViewport={initialViewport}
+    >
       <HomePanelHeader />
 
-      <div className="flex flex-col gap-6 px-8 pb-4">
-        <FeedNearbySection markers={markers} />
-        <FeedTrendingSection markers={markers} />
-      </div>
+      <Suspense fallback={<HomeFeedSkeleton />}>
+        <HomeFeedContent promises={promises} />
+      </Suspense>
 
       <MapDrawerExpanded>
         <SiteFooter />
