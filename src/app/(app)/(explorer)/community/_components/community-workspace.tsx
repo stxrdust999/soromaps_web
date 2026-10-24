@@ -1,17 +1,23 @@
 "use client";
 
-import { SearchIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
+import { SearchIcon, SparklesIcon } from "lucide-react";
+import Link from "next/link";
+import { use, useMemo, useState } from "react";
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isVerifiedExplorer } from "@/constants/verification";
-import { listExplorers } from "@/http/community/community";
-import { type ExplorerMock, explorersMock } from "@/mocks/community";
-import { publishedStoriesMock } from "@/mocks/stories";
-
+import type { getMyVerificationStatusResponse } from "@/http/activity/activity";
+import type { listExplorersResponse } from "@/http/community/community";
+import type { getFeedResponse } from "@/http/feed/feed";
+import type { listStoriesResponse } from "@/http/stories/stories";
+import type { ExplorerView } from "@/types/community";
+import type { FeedConquistaItem } from "@/types/feed";
+import type { SessionPayload } from "@/types/session";
+import type { StoryView } from "@/types/stories";
+import { mapFeedItemDtoToView } from "@/utils/mappers/feed-mapper";
 import { ContributionRanking } from "./contribution-ranking";
 import { ExplorerCard } from "./explorer-card";
 import { RecentAchievements } from "./recent-achievements";
@@ -19,51 +25,108 @@ import { StoryGeneratorDialog } from "./story-generator-dialog";
 import { StoryShowcase } from "./story-showcase";
 import { VerificationCard } from "./verification-card";
 
-/** Alinha cabeçalho e conteúdo no mesmo eixo largo das outras telas de leitura. */
 const CONTENT_WIDTH = "mx-auto flex w-full max-w-6xl";
 
+interface CommunityWorkspaceProps {
+  session: SessionPayload | null;
+  promises: {
+    explorersPromise: Promise<listExplorersResponse>;
+    storiesPromise: Promise<listStoriesResponse>;
+    verificationPromise: Promise<getMyVerificationStatusResponse>;
+    feedPromise: Promise<getFeedResponse>;
+  };
+}
+
 /**
- * Comunidade integrada à API com fallback para mocks.
+ * Área principal da Comunidade integrada via Streaming SSR (`use()` + `useMemo()`).
  */
-export function CommunityWorkspace() {
+export function CommunityWorkspace({
+  session,
+  promises,
+}: CommunityWorkspaceProps) {
+  const explorersResponse = use(promises.explorersPromise);
+  const storiesResponse = use(promises.storiesPromise);
+  const verificationResponse = use(promises.verificationPromise);
+  const feedResponse = use(promises.feedPromise);
+
   const [search, setSearch] = useState("");
-  const [explorers, setExplorers] = useState<ExplorerMock[]>(explorersMock);
 
-  useEffect(() => {
-    async function loadExplorers() {
-      try {
-        const res = await listExplorers({ PageSize: 50 });
-        if (res.status === 200 && res.data.items.length > 0) {
-          const mapped: ExplorerMock[] = res.data.items.map((e, idx) => ({
-            id: idx + 1,
-            nome: e.name,
-            iniciais: e.name.slice(0, 2).toUpperCase(),
-            bairro: e.neighborhood ?? "Sorocaba",
-            desde: "Recentemente",
-            pontosCadastrados: Number(e.approvedPlacesCount),
-            contribuicoesSemana: Number(e.contributionScore),
-            bio: "Explorador ativo de Sorocaba",
-            avatarUrl: e.avatarUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${e.name}`,
-            visitas: Number(e.visitsCount),
-            avaliacoes: Number(e.reviewsCount),
-            conquistas: Number(e.achievementsCount),
-            mesesNaPlataforma: Math.max(1, Math.floor((Date.now() - new Date(e.joinedAt).getTime()) / (1000 * 60 * 60 * 24 * 30))),
-            avaliacoesRemovidas: 0,
-            ultimasAvaliacoes: [],
-          }));
-          setExplorers(mapped);
-        }
-      } catch {
-        // Fallback silencioso
-      }
-    }
+  const explorers = useMemo<ExplorerView[]>(() => {
+    if (explorersResponse.status !== 200 || !explorersResponse.data.items)
+      return [];
 
-    loadExplorers();
-  }, []);
+    return explorersResponse.data.items.map((explorer) => ({
+      id: explorer.id,
+      nome: explorer.name,
+      iniciais: explorer.name.slice(0, 2).toUpperCase(),
+      bairro: explorer.neighborhood ?? "Sorocaba",
+      desde: new Date(explorer.joinedAt).toLocaleDateString("pt-BR", {
+        month: "short",
+        year: "numeric",
+      }),
+      pontosCadastrados: Number(explorer.approvedPlacesCount),
+      contribuicoesSemana: Number(explorer.contributionScore),
+      bio: "Explorador ativo de Sorocaba",
+      avatarUrl: explorer.avatarUrl ?? undefined,
+      visitas: Number(explorer.visitsCount),
+      avaliacoes: Number(explorer.reviewsCount),
+      conquistas: Number(explorer.achievementsCount),
+      mesesNaPlataforma: Math.max(
+        1,
+        Math.floor(
+          (Date.now() - new Date(explorer.joinedAt).getTime()) /
+            (1000 * 60 * 60 * 24 * 30),
+        ),
+      ),
+      avaliacoesRemovidas: 0,
+      ultimasAvaliacoes: [],
+    }));
+  }, [explorersResponse]);
 
-  const filtered = useMemo(() => {
+  const stories = useMemo<StoryView[]>(() => {
+    if (storiesResponse.status !== 200 || !storiesResponse.data.items)
+      return [];
+
+    return storiesResponse.data.items.map((story) => ({
+      id: story.id,
+      slug: story.slug,
+      chapeu: story.neighborhood ?? "Sorocaba",
+      titulo: story.title,
+      chamada: story.subtitle,
+      corpo: [],
+      fotoUrl:
+        story.coverPhotoUrl ??
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+      status: "publicada",
+      origem: story.origin === 1 ? "ia" : "equipe",
+      tempoLeitura: 4,
+      diasAtras: Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(story.createdAt).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      ),
+      locais: [],
+      locaisCount: Number(story.placesCount ?? 0),
+    }));
+  }, [storiesResponse]);
+
+  const verificationStatus = useMemo(() => {
+    if (verificationResponse.status === 200) return verificationResponse.data;
+    return null;
+  }, [verificationResponse]);
+
+  const recentAchievements = useMemo<FeedConquistaItem[]>(() => {
+    if (feedResponse.status !== 200 || !feedResponse.data.items) return [];
+
+    return feedResponse.data.items
+      .map(mapFeedItemDtoToView)
+      .filter((item): item is FeedConquistaItem => item?.kind === "conquista");
+  }, [feedResponse]);
+
+  const filteredExplorers = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     if (!query) return explorers;
 
     return explorers.filter(
@@ -73,30 +136,57 @@ export function CommunityWorkspace() {
     );
   }, [explorers, search]);
 
-  const verifiedCount = explorers.filter(isVerifiedExplorer).length;
+  const verifiedCount = useMemo(
+    () => explorers.filter(isVerifiedExplorer).length,
+    [explorers],
+  );
+
+  const rawRole =
+    session?.role ??
+    // @ts-expect-error compatibilidade caso o payload venha aninhado como user.role
+    session?.user?.role;
+
+  const isAdmin =
+    typeof rawRole === "string"
+      ? rawRole.trim().toLowerCase() === "admin"
+      : rawRole === 1;
 
   return (
     <main className="flex flex-1 flex-col">
+      {/* community - section */}
       <PageSection
         title="Comunidade"
         description="Quem explora Sorocaba, o que anda contribuindo e as pautas da cidade"
         className="gap-6"
-        actions={<StoryGeneratorDialog />}
+        actions={
+          isAdmin ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" asChild>
+                <Link href="/community/nova-pauta">
+                  <SparklesIcon />
+                  Gerar pauta (tela)
+                </Link>
+              </Button>
+              <StoryGeneratorDialog />
+            </div>
+          ) : undefined
+        }
         subitems={
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge>{explorers.length} exploradores</Badge>
             <Badge variant="outline">{verifiedCount} verificados</Badge>
-            <Badge variant="outline">
-              {publishedStoriesMock.length} pautas publicadas
-            </Badge>
+            <Badge variant="outline">{stories.length} pautas publicadas</Badge>
           </div>
         }
       >
         <div className={`${CONTENT_WIDTH} flex-col gap-8`}>
-          <StoryShowcase stories={publishedStoriesMock} />
+          {/* stories - showcase */}
+          <StoryShowcase stories={stories} />
 
-          <RecentAchievements />
+          {/* achievements - strip */}
+          <RecentAchievements items={recentAchievements} />
 
+          {/* explorers and ranking - layout */}
           <div className="flex gap-6">
             <div className="flex min-w-0 flex-1 flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -113,13 +203,13 @@ export function CommunityWorkspace() {
                 </div>
               </div>
 
-              {filtered.length === 0 ? (
+              {filteredExplorers.length === 0 ? (
                 <p className="py-12 text-center text-muted-foreground text-sm">
                   Ninguém encontrado com esse termo.
                 </p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {filtered.map((person) => (
+                  {filteredExplorers.map((person) => (
                     <ExplorerCard key={person.id} explorer={person} />
                   ))}
                 </div>
@@ -127,8 +217,12 @@ export function CommunityWorkspace() {
             </div>
 
             <aside className="hidden w-80 shrink-0 flex-col gap-4 xl:flex">
-              <ContributionRanking />
-              <VerificationCard />
+              <ContributionRanking
+                explorers={explorers}
+                currentUserId={session?.id}
+                currentUserNeighborhood={session?.neighborhood ?? "Centro"}
+              />
+              <VerificationCard verificationStatus={verificationStatus} />
             </aside>
           </div>
         </div>
