@@ -1,22 +1,35 @@
 "use client";
 
-import { MessageSquareIcon, SendIcon, StarIcon, ThumbsUpIcon } from "lucide-react";
+import {
+  FlagIcon,
+  Loader2Icon,
+  MessageSquareIcon,
+  SendIcon,
+  StarIcon,
+  ThumbsUpIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { createCommentAction } from "@/actions/comments";
+import {
+  createCommentAction,
+  deleteCommentAction,
+  listReviewCommentsAction,
+} from "@/actions/comments";
 import {
   createReviewAction,
   deleteReviewAction,
   toggleReviewUsefulVoteAction,
 } from "@/actions/reviews";
+import { ReportDialog } from "@/components/blocks/report-dialog";
 import { StarRating } from "@/components/blocks/star-rating";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import type { ReviewResponseDto } from "@/http/api.schemas";
+import type { CommentResponseDto, ReviewResponseDto } from "@/http/api.schemas";
 
 interface PlaceReviewsSectionProps {
   placeId: string;
@@ -25,7 +38,7 @@ interface PlaceReviewsSectionProps {
 }
 
 /**
- * Community reviews and comments feed for a place.
+ * Seção de avaliações e comentários da comunidade de um local.
  */
 export function PlaceReviewsSection({
   placeId,
@@ -35,8 +48,16 @@ export function PlaceReviewsSection({
   const [reviews, setReviews] = useState<ReviewResponseDto[]>(initialReviews);
   const [newContent, setNewContent] = useState("");
   const [newRating, setNewRating] = useState(5);
-  const [activeReplyReviewId, setActiveReplyReviewId] = useState<string | null>(null);
+  const [activeReplyReviewId, setActiveReplyReviewId] = useState<string | null>(
+    null,
+  );
   const [replyContent, setReplyContent] = useState("");
+  const [commentsByReview, setCommentsByReview] = useState<
+    Record<string, CommentResponseDto[]>
+  >({});
+  const [loadingCommentsReviewId, setLoadingCommentsReviewId] = useState<
+    string | null
+  >(null);
   const [isPending, startTransition] = useTransition();
 
   const handleCreateReview = () => {
@@ -85,42 +106,43 @@ export function PlaceReviewsSection({
 
   const handleToggleUseful = (review: ReviewResponseDto) => {
     startTransition(async () => {
-      const isUseful = review.markedUsefulByMe;
-      const prevUseful = isUseful;
+      const previousUseful = review.markedUsefulByMe;
       const count =
         typeof review.usefulVotesCount === "string"
           ? parseInt(review.usefulVotesCount, 10)
           : review.usefulVotesCount;
 
       setReviews((current) =>
-        current.map((r) =>
-          r.id === review.id
+        current.map((currentReview) =>
+          currentReview.id === review.id
             ? {
-                ...r,
-                markedUsefulByMe: !prevUseful,
-                usefulVotesCount: prevUseful ? Math.max(0, count - 1) : count + 1,
+                ...currentReview,
+                markedUsefulByMe: !previousUseful,
+                usefulVotesCount: previousUseful
+                  ? Math.max(0, count - 1)
+                  : count + 1,
               }
-            : r,
+            : currentReview,
         ),
       );
 
       const result = await toggleReviewUsefulVoteAction(
         review.id,
         placeId,
-        prevUseful,
+        previousUseful,
       );
 
       if (!result.success) {
         toast.error(result.message);
         setReviews((current) =>
-          current.map((r) =>
-            r.id === review.id
+          current.map((currentReview) =>
+            currentReview.id === review.id
               ? {
-                  ...r,
-                  markedUsefulByMe: prevUseful,
+                  ...currentReview,
+                  markedUsefulByMe: previousUseful,
                   usefulVotesCount: count,
                 }
-              : r,
+              : currentReview,
           ),
         );
       }
@@ -136,8 +158,29 @@ export function PlaceReviewsSection({
       }
 
       toast.success(result.message);
-      setReviews((current) => current.filter((r) => r.id !== reviewId));
+      setReviews((current) =>
+        current.filter((currentReview) => currentReview.id !== reviewId),
+      );
     });
+  };
+
+  const handleToggleCommentsSection = async (reviewId: string) => {
+    if (activeReplyReviewId === reviewId) {
+      setActiveReplyReviewId(null);
+      return;
+    }
+
+    setActiveReplyReviewId(reviewId);
+
+    if (!commentsByReview[reviewId]) {
+      setLoadingCommentsReviewId(reviewId);
+      const fetchedComments = await listReviewCommentsAction(reviewId);
+      setCommentsByReview((previous) => ({
+        ...previous,
+        [reviewId]: fetchedComments,
+      }));
+      setLoadingCommentsReviewId(null);
+    }
   };
 
   const handleSendComment = (reviewId: string) => {
@@ -151,17 +194,64 @@ export function PlaceReviewsSection({
       }
 
       toast.success(result.message);
+      const nowIso = new Date().toISOString();
+      const createdComment: CommentResponseDto = {
+        id: result.commentId ?? `comment-${Date.now()}`,
+        reviewId,
+        replyToId: null,
+        content: replyContent,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        author: {
+          id: currentUserId ?? "me",
+          name: "Você",
+          avatarUrl: null,
+        },
+      };
+
       setReplyContent("");
-      setActiveReplyReviewId(null);
+      setCommentsByReview((previous) => ({
+        ...previous,
+        [reviewId]: [...(previous[reviewId] ?? []), createdComment],
+      }));
 
       setReviews((current) =>
-        current.map((r) => {
-          if (r.id !== reviewId) return r;
+        current.map((currentReview) => {
+          if (currentReview.id !== reviewId) return currentReview;
           const count =
-            typeof r.commentsCount === "string"
-              ? parseInt(r.commentsCount, 10)
-              : r.commentsCount;
-          return { ...r, commentsCount: count + 1 };
+            typeof currentReview.commentsCount === "string"
+              ? parseInt(currentReview.commentsCount, 10)
+              : currentReview.commentsCount;
+          return { ...currentReview, commentsCount: count + 1 };
+        }),
+      );
+    });
+  };
+
+  const handleDeleteComment = (reviewId: string, commentId: string) => {
+    startTransition(async () => {
+      const result = await deleteCommentAction(commentId, placeId);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message);
+      setCommentsByReview((previous) => ({
+        ...previous,
+        [reviewId]: (previous[reviewId] ?? []).filter(
+          (comment) => comment.id !== commentId,
+        ),
+      }));
+
+      setReviews((current) =>
+        current.map((currentReview) => {
+          if (currentReview.id !== reviewId) return currentReview;
+          const count =
+            typeof currentReview.commentsCount === "string"
+              ? parseInt(currentReview.commentsCount, 10)
+              : currentReview.commentsCount;
+          return { ...currentReview, commentsCount: Math.max(0, count - 1) };
         }),
       );
     });
@@ -169,12 +259,13 @@ export function PlaceReviewsSection({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* section header - heading */}
       <div className="flex flex-col gap-2">
         <span className="text-xl font-semibold">Avaliações da Comunidade</span>
         <Separator />
       </div>
 
-      {/* Form de nova avaliação */}
+      {/* review creation - form */}
       <div className="rounded-xl border bg-card p-4 flex flex-col gap-3 shadow-xs">
         <span className="font-medium text-sm">Deixe sua avaliação</span>
 
@@ -203,7 +294,7 @@ export function PlaceReviewsSection({
         <Textarea
           placeholder="Conte como foi sua experiência, o que pedir ou quando visitar..."
           value={newContent}
-          onChange={(e) => setNewContent(e.target.value)}
+          onChange={(event) => setNewContent(event.target.value)}
           rows={3}
           className="resize-none text-sm"
         />
@@ -220,7 +311,7 @@ export function PlaceReviewsSection({
         </div>
       </div>
 
-      {/* Lista de avaliações */}
+      {/* reviews - list */}
       <div className="flex flex-col gap-4">
         {reviews.length === 0 ? (
           <p className="text-muted-foreground text-sm border border-dashed rounded-xl p-8 text-center">
@@ -232,7 +323,7 @@ export function PlaceReviewsSection({
             const initials = author?.name
               ? author.name
                   .split(" ")
-                  .map((n) => n[0])
+                  .map((part) => part[0])
                   .slice(0, 2)
                   .join("")
                   .toUpperCase()
@@ -249,6 +340,7 @@ export function PlaceReviewsSection({
               typeof review.commentsCount === "string"
                 ? parseInt(review.commentsCount, 10)
                 : review.commentsCount;
+            const reviewComments = commentsByReview[review.id] ?? [];
 
             return (
               <div
@@ -270,7 +362,10 @@ export function PlaceReviewsSection({
                           {author?.name ?? "Explorador"}
                         </span>
                         {author?.isVerifiedExplorer && (
-                          <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] py-0 px-1.5"
+                          >
                             Verificado
                           </Badge>
                         )}
@@ -298,7 +393,9 @@ export function PlaceReviewsSection({
                     >
                       <ThumbsUpIcon
                         className={`size-3 ${
-                          review.markedUsefulByMe ? "fill-primary text-primary" : ""
+                          review.markedUsefulByMe
+                            ? "fill-primary text-primary"
+                            : ""
                         }`}
                       />
                       <span>Útil ({usefulCount})</span>
@@ -307,11 +404,7 @@ export function PlaceReviewsSection({
                     <Button
                       variant="ghost"
                       size="xs"
-                      onClick={() =>
-                        setActiveReplyReviewId(
-                          activeReplyReviewId === review.id ? null : review.id,
-                        )
-                      }
+                      onClick={() => handleToggleCommentsSection(review.id)}
                       className="gap-1 text-xs h-7"
                     >
                       <MessageSquareIcon className="size-3" />
@@ -319,25 +412,86 @@ export function PlaceReviewsSection({
                     </Button>
                   </div>
 
-                  {currentUserId && author?.id === currentUserId && (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => handleDeleteReview(review.id)}
-                      className="text-destructive hover:text-destructive h-7"
-                    >
-                      Excluir
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <ReportDialog
+                      targetType="review"
+                      targetId={review.id}
+                      targetLabel={`Avaliação de ${author?.name ?? "Explorador"}`}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="gap-1 text-xs h-7 text-muted-foreground"
+                        >
+                          <FlagIcon className="size-3" />
+                          Denunciar
+                        </Button>
+                      }
+                    />
+
+                    {currentUserId && author?.id === currentUserId && (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => handleDeleteReview(review.id)}
+                        className="text-destructive hover:text-destructive h-7"
+                      >
+                        Excluir
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Caixa de resposta ativa */}
+                {/* comments - thread */}
                 {activeReplyReviewId === review.id && (
-                  <div className="mt-2 flex flex-col gap-2 rounded-lg bg-muted/50 p-2.5">
+                  <div className="mt-2 flex flex-col gap-3 rounded-lg bg-muted/50 p-3">
+                    {loadingCommentsReviewId === review.id ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                        Carregando comentários...
+                      </div>
+                    ) : reviewComments.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {reviewComments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="flex items-start justify-between gap-2 rounded-md bg-background/80 p-2 text-xs"
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold text-foreground">
+                                {comment.author?.name ?? "Explorador"}
+                              </span>
+                              <p className="text-muted-foreground">
+                                {comment.content}
+                              </p>
+                            </div>
+
+                            {currentUserId &&
+                              comment.author?.id === currentUserId && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-6 text-destructive"
+                                  onClick={() =>
+                                    handleDeleteComment(review.id, comment.id)
+                                  }
+                                >
+                                  <Trash2Icon className="size-3" />
+                                </Button>
+                              )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum comentário ainda.
+                      </p>
+                    )}
+
                     <Textarea
                       placeholder="Escreva uma resposta ou comentário..."
                       value={replyContent}
-                      onChange={(e) => setReplyContent(e.target.value)}
+                      onChange={(event) => setReplyContent(event.target.value)}
                       rows={2}
                       className="resize-none text-xs"
                     />

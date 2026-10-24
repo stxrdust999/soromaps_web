@@ -7,14 +7,38 @@ import { getApiErrorMessage } from "@/helpers/api-error";
 import {
   createComment,
   deleteComment,
+  listCommentsByReview,
   updateComment,
 } from "@/http/comments/comments";
+import type { CommentResponseDto } from "@/http/api.schemas";
 import type { FormState } from "@/types/form";
 
 const INVALID_PAYLOAD_MESSAGE =
   "Algo de errado aconteceu, por favor tente novamente.";
 const REQUEST_FAILED_MESSAGE =
   "Um erro ocorreu, por favor tente novamente em alguns minutos.";
+
+/**
+ * Fetches paginated comments for a given review.
+ */
+export async function listReviewCommentsAction(
+  reviewId: string,
+): Promise<CommentResponseDto[]> {
+  try {
+    const response = await listCommentsByReview(reviewId, {
+      Page: 1,
+      PageSize: 50,
+    });
+
+    if (response.status === 200 && response.data.items)
+      return response.data.items;
+
+    return [];
+  } catch (error) {
+    console.error("listReviewCommentsAction error:", error);
+    return [];
+  }
+}
 
 /**
  * Creates a comment or reply on a review.

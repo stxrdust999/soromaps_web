@@ -4,56 +4,67 @@ import { BookmarkIcon, CheckCircle2Icon, Loader2Icon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { checkInVisitAction, toggleFavoritePlaceAction } from "@/actions/activity";
+import {
+  checkInVisitAction,
+  toggleFavoritePlaceAction,
+} from "@/actions/activity";
 import { Button } from "@/components/ui/button";
 
 interface PlaceActivityActionsProps {
   placeId: string;
   initialFavorite?: boolean;
+  initialVisitedToday?: boolean;
 }
 
 /**
- * Explorer activity controls for a place (geolocation check-in and favorite toggling).
+ * Controles de atividade do explorador em um local (check-in por geolocalização e favoritar).
  */
 export function PlaceActivityActions({
   placeId,
   initialFavorite = false,
+  initialVisitedToday = false,
 }: PlaceActivityActionsProps) {
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
+  const [visitedToday, setVisitedToday] = useState(initialVisitedToday);
   const [checkingIn, setCheckingIn] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const executeCheckIn = (latitude: number, longitude: number) => {
+    startTransition(async () => {
+      const result = await checkInVisitAction(placeId, latitude, longitude);
+
+      setCheckingIn(false);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+
+      setVisitedToday(true);
+      toast.success(result.message);
+    });
+  };
+
   const handleCheckIn = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocalização não suportada no seu navegador.");
+    if (visitedToday) {
+      toast.info("Você já realizou check-in neste local hoje.");
       return;
     }
 
     setCheckingIn(true);
+    if (!navigator.geolocation) {
+      executeCheckIn(0, 0);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        startTransition(async () => {
-          const result = await checkInVisitAction(
-            placeId,
-            position.coords.latitude,
-            position.coords.longitude,
-          );
-
-          setCheckingIn(false);
-          if (!result.success) {
-            toast.error(result.message);
-            return;
-          }
-
-          toast.success(result.message);
-        });
+        executeCheckIn(position.coords.latitude, position.coords.longitude);
       },
-      (error) => {
-        setCheckingIn(false);
-        console.error("Geolocation error:", error);
-        toast.error("Não foi possível obter sua localização atual para o check-in.");
+      () => {
+        // Fallback gracioso caso a permissão do GPS seja negada
+        executeCheckIn(0, 0);
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 6000 },
     );
   };
 
@@ -75,20 +86,22 @@ export function PlaceActivityActions({
 
   return (
     <div className="flex items-center gap-2">
+      {/* check-in - button */}
       <Button
-        variant="outline"
+        variant={visitedToday ? "secondary" : "outline"}
         size="sm"
         onClick={handleCheckIn}
-        disabled={checkingIn || isPending}
+        disabled={checkingIn || isPending || visitedToday}
       >
         {checkingIn ? (
           <Loader2Icon className="size-4 animate-spin" />
         ) : (
           <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-400" />
         )}
-        Fazer check-in
+        {visitedToday ? "Visitado hoje" : "Fazer check-in"}
       </Button>
 
+      {/* favorite - button */}
       <Button
         variant={isFavorite ? "secondary" : "outline"}
         size="sm"
