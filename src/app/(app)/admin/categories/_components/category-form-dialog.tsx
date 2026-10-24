@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   Dialog,
   DialogContent,
@@ -189,39 +190,14 @@ export function CategoryFormDialog({
                 name="cor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cor</FormLabel>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {CATEGORY_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          title={color}
-                          aria-label={`Usar a cor ${color}`}
-                          aria-pressed={field.value === color}
-                          onClick={() => field.onChange(color)}
-                          className={cn(
-                            "size-7 rounded-md border-2 border-transparent",
-                            field.value === color && "border-foreground",
-                          )}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground text-xs">Hex</span>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          className="h-8 w-28 font-mono text-xs"
-                        />
-                      </FormControl>
-                      <span
-                        className="size-6 rounded-md border"
-                        style={{ backgroundColor: values.cor }}
+                    <FormLabel>Cor da Categoria</FormLabel>
+                    <FormControl>
+                      <ColorPicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        presets={CATEGORY_COLORS}
                       />
-                    </div>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

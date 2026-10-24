@@ -1,13 +1,14 @@
 "use client";
 
 import { PlusIcon } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { use, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { listCategoriesResponse } from "@/http/categories/categories";
 import type { CategoryFormSchema } from "@/validations/categories";
 
 import { CategoriesTable } from "./categories-table";
@@ -15,14 +16,28 @@ import { CategoryFormDialog } from "./category-form-dialog";
 import { DeleteCategoryDialog } from "./delete-category-dialog";
 import { MapPreviewStrip } from "./map-preview-strip";
 import type { CategoryRowActions } from "./row-action";
-import { useCategories, type CategoryViewModel } from "./use-categories";
+import { type CategoryViewModel, useCategories } from "./use-categories";
+
+interface CategoriesWorkspaceProps {
+  promises: {
+    categoriesPromise: Promise<listCategoriesResponse>;
+  };
+}
 
 /**
- * Tela de categorias conectada com a API e Server Actions.
+ * Tela de categorias conectada com a API via Streaming SSR (`use()` + `useMemo()`).
  */
-export function CategoriesWorkspace() {
+export function CategoriesWorkspace({ promises }: CategoriesWorkspaceProps) {
+  const categoriesResponse = use(promises.categoriesPromise);
+
+  const initialCategories = useMemo(() => {
+    if (categoriesResponse.status === 200 && categoriesResponse.data.items)
+      return categoriesResponse.data.items;
+    return [];
+  }, [categoriesResponse]);
+
   const { categories, stats, save, duplicate, toggleActive, move, remove } =
-    useCategories();
+    useCategories(initialCategories);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CategoryViewModel | null>(null);
@@ -49,22 +64,19 @@ export function CategoriesWorkspace() {
 
   async function handleSubmit(values: CategoryFormSchema) {
     const success = await save(values, editing?.id ?? null);
-    if (success) {
-      setFormOpen(false);
-    }
+    if (success) setFormOpen(false);
   }
 
   async function handleDelete(targetId?: string) {
     if (!deleting) return;
 
     const success = await remove(deleting.id, targetId);
-    if (success) {
-      setDeleting(null);
-    }
+    if (success) setDeleting(null);
   }
 
   return (
     <main className="flex flex-1 flex-col">
+      {/* categories - section */}
       <PageSection
         title="Categorias"
         description="Catálogo que define ícone, cor e ordem dos pins no mapa"
