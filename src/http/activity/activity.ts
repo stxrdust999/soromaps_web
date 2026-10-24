@@ -8,8 +8,10 @@
 import type {
   CheckInVisitDto,
   ListMyFavoritesParams,
+  ListMyReviewsParams,
   ListMyVisitsParams,
   PagedResponseDtoOfFavoriteResponseDto,
+  PagedResponseDtoOfReviewResponseDto,
   PagedResponseDtoOfVisitResponseDto,
   ProblemDetails,
   UserStatsDto,
@@ -513,6 +515,75 @@ export const getGetMyVerificationStatusUrl = () => {
 export const getMyVerificationStatus = async ( options?: Parameters<typeof http>[1]): Promise<getMyVerificationStatusResponse> => {
 
   return http<getMyVerificationStatusResponse>(getGetMyVerificationStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listMyReviewsResponse200TextPlain = {
+  data: PagedResponseDtoOfReviewResponseDto
+  status: 200
+}
+
+export type listMyReviewsResponse200ApplicationJson = {
+  data: PagedResponseDtoOfReviewResponseDto
+  status: 200
+}
+
+export type listMyReviewsResponse200TextJson = {
+  data: PagedResponseDtoOfReviewResponseDto
+  status: 200
+}
+
+export type listMyReviewsResponse401TextPlain = {
+  data: ProblemDetails
+  status: 401
+}
+
+export type listMyReviewsResponse401ApplicationJson = {
+  data: ProblemDetails
+  status: 401
+}
+
+export type listMyReviewsResponse401TextJson = {
+  data: ProblemDetails
+  status: 401
+}
+
+export type listMyReviewsResponseSuccess = (listMyReviewsResponse200TextPlain | listMyReviewsResponse200ApplicationJson | listMyReviewsResponse200TextJson) & {
+  headers: Headers;
+};
+export type listMyReviewsResponseError = (listMyReviewsResponse401TextPlain | listMyReviewsResponse401ApplicationJson | listMyReviewsResponse401TextJson) & {
+  headers: Headers;
+};
+
+export type listMyReviewsResponse = (listMyReviewsResponseSuccess | listMyReviewsResponseError)
+
+export const getListMyReviewsUrl = (params?: ListMyReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/users/me/reviews?${stringifiedParams}` : `/api/users/me/reviews`
+}
+
+/**
+ * @summary Lista avaliações publicadas pelo usuário autenticado
+ */
+export const listMyReviews = async (params?: ListMyReviewsParams, options?: Parameters<typeof http>[1]): Promise<listMyReviewsResponse> => {
+
+  return http<listMyReviewsResponse>(getListMyReviewsUrl(params),
   {
     ...options,
     method: 'GET'

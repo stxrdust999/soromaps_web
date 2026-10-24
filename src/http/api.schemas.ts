@@ -282,6 +282,10 @@ export interface ReviewResponseDto {
   commentsCount: number | string;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  placeName?: string | null;
+  /** @nullable */
+  placeCategory?: string | null;
 }
 
 export interface TagResponseDto {
@@ -572,6 +576,15 @@ export interface FeedbackResponseDto {
   createdAt: string;
 }
 
+export interface FeedAchievementSummaryDto {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  holdersPercentage: number | string;
+}
+
 export interface FeedItemDto {
   id: string;
   kind: string;
@@ -595,6 +608,24 @@ export interface FeedItemDto {
   imageUrl: string | null;
   metadata: unknown;
   occurredAt: string;
+  author?: null | AuthorSummaryDto;
+  /** @nullable */
+  authorAchievementsCount?: number | string | null;
+  /** @nullable */
+  reviewId?: string | null;
+  /** @nullable */
+  rating?: number | string | null;
+  /** @nullable */
+  usefulVotesCount?: number | string | null;
+  /** @nullable */
+  markedUsefulByMe?: boolean | null;
+  /** @nullable */
+  storySlug?: string | null;
+  /** @nullable */
+  placesCount?: number | string | null;
+  /** @nullable */
+  visitsCount?: number | string | null;
+  achievement?: null | FeedAchievementSummaryDto;
 }
 
 export interface FeedMuteResponseDto {
@@ -618,6 +649,8 @@ export interface ModerationAuthorStatsDto {
   totalSubmittedPlaces: number | string;
   /** @pattern ^-?(?:0|[1-9]\d*)$ */
   approvedPlacesCount: number | string;
+  /** @pattern ^-?(?:0|[1-9]\d*)$ */
+  reviewsWrittenCount: number | string;
   joinedAt: string;
 }
 
@@ -643,6 +676,10 @@ export interface ModerationDecisionResponseDto {
   feedbackNote: string | null;
   isUndo: boolean;
   createdAt: string;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  categoryName?: string | null;
 }
 
 export interface PlacePhotoResponseDto {
@@ -970,6 +1007,17 @@ export interface PagedResponseDtoOfVisitResponseDto {
   hasPreviousPage?: boolean;
 }
 
+export interface PlaceVisitorRankDto {
+  userId: string;
+  name: string;
+  /** @nullable */
+  avatarUrl: string | null;
+  /** @pattern ^-?(?:0|[1-9]\d*)$ */
+  visitsCount: number | string;
+  /** @pattern ^-?(?:0|[1-9]\d*)$ */
+  achievementsCount: number | string;
+}
+
 export interface PlaceResponseDto {
   id: string;
   categoryId: string;
@@ -1000,6 +1048,11 @@ export interface PlaceResponseDto {
   status: PlaceStatus;
   createdAt: string;
   updatedAt: string;
+  isFavoritedByMe?: boolean;
+  visitedTodayByMe?: boolean;
+  /** @nullable */
+  topVisitors?: PlaceVisitorRankDto[] | null;
+  featuredVerifiedReview?: null | ReviewResponseDto;
 }
 
 export interface ProblemDetails {
@@ -1300,6 +1353,21 @@ Page?: number | string;
 PageSize?: number | string;
 categoryId?: string;
 neighborhood?: string;
+};
+
+export type ListMyReviewsParams = {
+/**
+ * @minimum 1
+ * @maximum 2147483647
+ * @pattern ^-?(?:0|[1-9]\d*)$
+ */
+Page?: number | string;
+/**
+ * @minimum 1
+ * @maximum 100
+ * @pattern ^-?(?:0|[1-9]\d*)$
+ */
+PageSize?: number | string;
 };
 
 export type GetAdminDashboardStatsParams = {

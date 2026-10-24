@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Separator } from "../ui/separator";
+import { FeedbackDialog } from "./feedback-dialog";
 
 interface SidebarUserSectionProps {
   userName?: string;
@@ -78,6 +79,8 @@ export function SidebarUserSection({
             <UserCircleIcon />
             <p>Gerenciar Conta</p>
           </Button>
+
+          <FeedbackDialog />
 
           <Button
             onClick={handleLogout}

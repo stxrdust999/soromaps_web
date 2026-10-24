@@ -13,7 +13,9 @@ export async function http<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const isServer = typeof window === "undefined";
-  const baseUrl = isServer ? (process.env.API_URL ?? "") : "/api/proxy";
+  const baseUrl = isServer
+    ? (process.env.API_URL ?? "http://localhost:5099")
+    : "/api/proxy";
   const normalizedPath = isServer
     ? path
     : path.replace(/^\/api(?=\/|$)/, "");

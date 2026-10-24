@@ -1217,6 +1217,90 @@
         ]
       }
     },
+    "/api/users/me/reviews": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "Lista avaliações publicadas pelo usuário autenticado",
+        "operationId": "listMyReviews",
+        "parameters": [
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResponseDtoOfReviewResponseDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResponseDtoOfReviewResponseDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResponseDtoOfReviewResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/admin/stats": {
       "get": {
         "tags": [
@@ -9740,6 +9824,42 @@
           }
         }
       },
+      "FeedAchievementSummaryDto": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "icon",
+          "color",
+          "holdersPercentage"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "holdersPercentage": {
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "FeedItemDto": {
         "required": [
           "id",
@@ -9824,6 +9944,85 @@
           "occurredAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "author": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthorSummaryDto"
+              }
+            ]
+          },
+          "authorAchievementsCount": {
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "reviewId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "rating": {
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "usefulVotesCount": {
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "markedUsefulByMe": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "storySlug": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placesCount": {
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "visitsCount": {
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "achievement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedAchievementSummaryDto"
+              }
+            ]
           }
         }
       },
@@ -9939,6 +10138,7 @@
           "avatarUrl",
           "totalSubmittedPlaces",
           "approvedPlacesCount",
+          "reviewsWrittenCount",
           "joinedAt"
         ],
         "type": "object",
@@ -9965,6 +10165,14 @@
             "format": "int32"
           },
           "approvedPlacesCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "reviewsWrittenCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -10071,6 +10279,18 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "neighborhood": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categoryName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -11408,6 +11628,72 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "isFavoritedByMe": {
+            "type": "boolean"
+          },
+          "visitedTodayByMe": {
+            "type": "boolean"
+          },
+          "topVisitors": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PlaceVisitorRankDto"
+            }
+          },
+          "featuredVerifiedReview": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewResponseDto"
+              }
+            ]
+          }
+        }
+      },
+      "PlaceVisitorRankDto": {
+        "required": [
+          "userId",
+          "name",
+          "avatarUrl",
+          "visitsCount",
+          "achievementsCount"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "visitsCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "achievementsCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -11824,6 +12110,18 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "placeName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "placeCategory": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
