@@ -7,20 +7,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { newPlacesWeekMock } from "@/mocks/admin-dashboard";
+import type { NewPlacesSummary } from "@/types/dashboard";
 
 import { InfoHint } from "./info-hint";
 
-const { total, metaAtingida, variacaoSemanal, stages } = newPlacesWeekMock;
-
-const totalStages = stages.reduce((sum, stage) => sum + stage.total, 0);
+interface NewPlacesCardProps {
+  summary: NewPlacesSummary;
+}
 
 /**
  * Lugares cadastrados na semana, quebrados por estágio de moderação — o
  * mesmo número que a fila "Moderação de pontos" despacha, visto por outro
  * ângulo.
  */
-export function NewPlacesCard() {
+export function NewPlacesCard({ summary }: NewPlacesCardProps) {
+  const { total, metaAtingida, variacaoSemanal, stages } = summary;
+  const totalStages = Math.max(
+    stages.reduce((sum, stage) => sum + stage.total, 0),
+    1,
+  );
+
   return (
     <Card className="justify-between gap-4">
       <CardHeader>
@@ -74,9 +80,10 @@ export function NewPlacesCard() {
 
       <CardFooter>
         <CardDescription className="text-xs">
-          {variacaoSemanal}% a mais que na semana anterior
+          {variacaoSemanal}% em relação à semana anterior
         </CardDescription>
       </CardFooter>
     </Card>
   );
 }
+

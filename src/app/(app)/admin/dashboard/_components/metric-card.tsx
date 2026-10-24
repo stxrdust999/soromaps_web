@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { MetricCardMock } from "@/mocks/admin-dashboard";
+import type { MetricCardMock } from "@/types/dashboard";
 
 import { InfoHint } from "./info-hint";
 
