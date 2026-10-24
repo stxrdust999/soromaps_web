@@ -7,7 +7,7 @@ import { Fragment } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { ReviewMock } from "@/mocks/admin-reviews";
+import type { ReviewMock } from "@/types/reviews";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 interface ReviewRowProps {
@@ -17,14 +17,6 @@ interface ReviewRowProps {
 
 /**
  * Linha da tabela de avaliações, com painel expansível embaixo.
- *
- * Substitui o `RowCommon` compartilhado **só nesta tela**: ele serve seis
- * telas e não deve ganhar um conceito de expansão por causa de uma. Aqui a
- * expansão é uma `<TableRow>` extra com `colSpan`, e não uma tabela aninhada —
- * comentário tem forma diferente de avaliação, e tabela dentro de tabela
- * traria coluna, ordenação e paginação para dois ou três itens.
- *
- * @param props Linha do TanStack e se o painel está aberto.
  */
 export function ReviewRow({ row, isExpanded }: ReviewRowProps) {
   const review = row.original;

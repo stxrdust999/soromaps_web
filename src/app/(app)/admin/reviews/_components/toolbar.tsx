@@ -17,7 +17,7 @@ import {
 } from "@/components/table/filter-chip";
 import { FilterChipsScrollArea } from "@/components/table/filter-chips-scroll-area";
 import { FilterResetButton } from "@/components/table/filter-reset-button";
-import type { ReviewMock } from "@/mocks/admin-reviews";
+import type { ReviewMock } from "@/types/reviews";
 import { hasActiveFilters } from "@/utils/table/has-active-filters";
 
 import { reviewColumnsNames } from "./columns";
@@ -46,10 +46,7 @@ interface ReviewsToolbarProps {
 }
 
 /**
- * Toolbar no padrão de `/admin/users`: um chip por filtro de coluna.
- *
- * O chip de Status é o que dá acesso às removidas — a exclusão é lógica, então
- * elas continuam na mesma tabela em vez de virarem uma aba separada.
+ * Toolbar da listagem administrativa de avaliações.
  */
 export function ReviewsToolbar({ table }: ReviewsToolbarProps) {
   const corpoColumn = table.getColumn("corpo");

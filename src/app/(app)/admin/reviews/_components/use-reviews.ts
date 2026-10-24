@@ -5,21 +5,12 @@ import { toast } from "sonner";
 
 import { removeContentAction } from "@/actions/reviews";
 import type { RemovalReason } from "@/constants/content-removal";
-import type { AdminReviewItemDto } from "@/http/api.schemas";
+import { explorerCredential } from "@/constants/explorer-titles";
 import { adminListReviews } from "@/http/admin-reviews/admin-reviews";
-import { type ReviewMock, reviewsMock } from "@/mocks/admin-reviews";
+import type { AdminReviewItemDto } from "@/http/api.schemas";
+import type { ReviewMock } from "@/types/reviews";
 
-/**
- * Distância mínima entre a nota e a média do local para a avaliação contar
- * como discrepante. 2,5 é meia escala: separa "gostei menos que a maioria" de
- * "avaliei outro lugar".
- */
 const DISCREPANCY_THRESHOLD = 2.5;
-
-/**
- * Abaixo disto a média do local não tem massa para servir de referência —
- * duas avaliações fazem qualquer terceira parecer discrepante.
- */
 const MIN_REVIEWS_FOR_AVERAGE = 4;
 
 export type ReviewSignalKind = "spam" | "duplicada" | "discrepante";
@@ -27,13 +18,24 @@ export type ReviewSignalKind = "spam" | "duplicada" | "discrepante";
 export interface ReviewSignal {
   kind: ReviewSignalKind;
   label: string;
-  /** `bad` costuma virar remoção; `warn` pede leitura antes de decidir. */
   tone: "bad" | "warn";
 }
 
-/** Média das avaliações publicadas de cada local. */
-function averageByPlace(reviews: ReviewMock[]): Map<number | string, number> {
-  const totals = new Map<number | string, { soma: number; contagem: number }>();
+function parseNumeric(
+  value: number | string | null | undefined,
+  fallback = 0,
+): number {
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function averageByPlace(reviews: ReviewMock[]): Map<string, number> {
+  const totals = new Map<string, { soma: number; contagem: number }>();
 
   for (const review of reviews) {
     if (review.status !== "publicada") continue;
@@ -53,30 +55,46 @@ function averageByPlace(reviews: ReviewMock[]): Map<number | string, number> {
 }
 
 /**
- * Converte item retornado por adminListReviews para ReviewMock.
+ * Converte um `AdminReviewItemDto` retornado pela API para o contrato `ReviewMock`.
  */
-function mapAdminReviewDtoToMock(dto: AdminReviewItemDto): ReviewMock {
+export function mapAdminReviewDtoToMock(dto: AdminReviewItemDto): ReviewMock {
   const diffDays = Math.max(
-    1,
+    0,
     Math.floor(
       (Date.now() - new Date(dto.createdAt).getTime()) / (1000 * 60 * 60 * 24),
     ),
   );
-
+  const authorName = dto.author?.name ?? "Explorador";
+  const initials =
+    authorName
+      .split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "EX";
   return {
     id: dto.id,
-    autorId: "ana",
+    autorId: dto.author?.id ?? `author-${dto.id}`,
+    autor: {
+      id: dto.author?.id ?? `author-${dto.id}`,
+      nome: authorName,
+      iniciais: initials,
+      titulo: explorerCredential(1),
+      avatarUrl: dto.author?.avatarUrl ?? undefined,
+    },
     local: {
-      id: dto.placeId as any,
+      id: dto.placeId,
       nome: dto.placeName,
       bairro: "Sorocaba",
       categoria: "Local",
     },
-    nota: typeof dto.rating === "string" ? parseFloat(dto.rating) : dto.rating,
+    nota: parseNumeric(dto.rating, 5),
+    placeRatingAverage: parseNumeric(dto.placeRatingAverage, 0),
     corpo: dto.content,
     diasPublicado: diffDays,
     status: "publicada",
     spam: dto.signals?.includes("spam"),
+    signals: dto.signals ?? [],
     comentarios: [],
   };
 }
@@ -87,30 +105,34 @@ function mapAdminReviewDtoToMock(dto: AdminReviewItemDto): ReviewMock {
 export function getReviewSignals(
   review: ReviewMock,
   reviews: ReviewMock[],
-  averages: Map<number | string, number>,
+  averages: Map<string, number>,
 ): ReviewSignal[] {
   const signals: ReviewSignal[] = [];
 
-  if (review.spam) {
+  if (review.spam || review.signals?.includes("spam")) {
     signals.push({ kind: "spam", label: "Suspeita de spam", tone: "bad" });
   }
 
-  const duplicated = reviews.some(
-    (other) =>
-      other.id !== review.id &&
-      other.autorId === review.autorId &&
-      other.local.id === review.local.id,
-  );
+  const duplicated =
+    review.signals?.includes("duplicate") ||
+    reviews.some(
+      (other) =>
+        other.id !== review.id &&
+        other.autorId === review.autorId &&
+        other.local.id === review.local.id,
+    );
 
   if (duplicated) {
     signals.push({ kind: "duplicada", label: "Duplicada", tone: "warn" });
   }
 
-  const average = averages.get(review.local.id);
+  const average = averages.get(review.local.id) ?? review.placeRatingAverage;
 
   if (
-    average !== undefined &&
-    Math.abs(review.nota - average) >= DISCREPANCY_THRESHOLD
+    review.signals?.includes("discrepant") ||
+    (average !== undefined &&
+      average > 0 &&
+      Math.abs(review.nota - average) >= DISCREPANCY_THRESHOLD)
   ) {
     signals.push({ kind: "discrepante", label: "Discrepante", tone: "warn" });
   }
@@ -121,23 +143,23 @@ export function getReviewSignals(
 /**
  * Estado da listagem administrativa de avaliações integrado à API real.
  */
-export function useReviews() {
-  const [reviews, setReviews] = useState<ReviewMock[]>(reviewsMock);
+export function useReviews(initialReviews: ReviewMock[] = []) {
+  const [reviews, setReviews] = useState<ReviewMock[]>(initialReviews);
+
+  useEffect(() => {
+    setReviews(initialReviews);
+  }, [initialReviews]);
 
   const reload = useCallback(async () => {
     try {
       const response = await adminListReviews({ Page: 1, PageSize: 100 });
-      if (response.status === 200 && response.data.items && response.data.items.length > 0) {
+      if (response.status === 200 && response.data.items) {
         setReviews(response.data.items.map(mapAdminReviewDtoToMock));
       }
     } catch (error) {
       console.error("Erro ao carregar avaliações administrativas:", error);
     }
   }, []);
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
 
   const averages = useMemo(() => averageByPlace(reviews), [reviews]);
 
@@ -151,49 +173,45 @@ export function useReviews() {
   }, [reviews, averages]);
 
   const stats = useMemo(() => {
-    const published = reviews.filter((r) => r.status === "publicada");
+    const published = reviews.filter((review) => review.status === "publicada");
 
     const average = published.length
-      ? published.reduce((sum, r) => sum + r.nota, 0) / published.length
+      ? published.reduce((sum, review) => sum + review.nota, 0) /
+        published.length
       : 0;
 
     return {
       publicadas: published.length,
       notaMedia: average,
-      removidas: reviews.filter((r) => r.status === "removida").length,
+      removidas: reviews.filter((review) => review.status === "removida")
+        .length,
       comSinal: published.filter(
-        (r) => (signalsById.get(r.id)?.length ?? 0) > 0,
+        (review) => (signalsById.get(review.id)?.length ?? 0) > 0,
       ).length,
     };
   }, [reviews, signalsById]);
 
-  /** Marca como removida com auditoria na API. */
-  const remove = useCallback(
-    async (ids: string[], motivo: RemovalReason) => {
-      const alvo = new Set(ids);
+  const remove = useCallback(async (ids: string[], motivo: RemovalReason) => {
+    const alvo = new Set(ids);
 
-      setReviews((current) =>
-        current.map((review) =>
-          alvo.has(review.id)
-            ? {
-                ...review,
-                status: "removida" as const,
-                removidaPor: "Admin",
-                motivoRemocao: motivo,
-              }
-            : review,
-        ),
-      );
+    setReviews((current) =>
+      current.map((review) =>
+        alvo.has(review.id)
+          ? {
+              ...review,
+              status: "removida" as const,
+              removidaPor: "Admin",
+              motivoRemocao: motivo,
+            }
+          : review,
+      ),
+    );
 
-      for (const id of ids) {
-        const result = await removeContentAction("review", id, motivo);
-        if (!result.success) {
-          toast.error(result.message);
-        }
-      }
-    },
-    [],
-  );
+    for (const id of ids) {
+      const result = await removeContentAction("review", id, motivo);
+      if (!result.success) toast.error(result.message);
+    }
+  }, []);
 
   const restore = useCallback((id: string) => {
     setReviews((current) =>

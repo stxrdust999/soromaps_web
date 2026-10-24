@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { reviewsSummaryMock } from "@/mocks/admin-reviews";
 
 interface StatProps {
   label: string;
@@ -30,9 +29,7 @@ interface ReviewsStatsProps {
 }
 
 /**
- * Os quatro números do topo. A nota média é o que diz se a base está saudável,
- * e "com sinal de problema" é o que justifica a tela existir — os outros dois
- * só dizem tamanho.
+ * Indicadores numéricos da listagem administrativa de avaliações.
  */
 export function ReviewsStats({
   publicadas,
@@ -50,11 +47,7 @@ export function ReviewsStats({
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         })}
-        trailing={
-          <Badge variant="warning">
-            {reviewsSummaryMock.variacaoNotaMedia}
-          </Badge>
-        }
+        trailing={<Badge variant="outline">Escala 1–5</Badge>}
       />
 
       <Stat label="Removidas" value={removidas} />
