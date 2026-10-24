@@ -180,6 +180,7 @@ export async function updateCurrentUserAction(data: FormData): Promise<FormState
   const name = String(data.get("name") ?? "").trim();
   const neighborhood = String(data.get("neighborhood") ?? "").trim();
   const biography = String(data.get("biography") ?? "").trim();
+  const avatarUrl = String(data.get("avatarUrl") ?? "").trim();
 
   if (!name) {
     return {
@@ -194,7 +195,7 @@ export async function updateCurrentUserAction(data: FormData): Promise<FormState
       name,
       neighborhood: neighborhood || null,
       biography: biography || null,
-      avatarUrl: null,
+      avatarUrl: avatarUrl || null,
     });
 
     if (response.status !== 200) {

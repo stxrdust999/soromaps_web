@@ -8,6 +8,7 @@ import {
   MapIcon,
   MapPinned,
   MessageSquare,
+  Settings,
   Shield,
   Tags,
   Trophy,
@@ -58,6 +59,7 @@ export const PROFILE_TABS: NavItem[] = [
   { label: "Favoritos", url: "/profile/favorites", icon: Heart },
   { label: "Conquistas", url: "/profile/achievements", icon: Trophy },
   { label: "Estatísticas", url: "/profile/stats", icon: ChartNoAxesColumn },
+  { label: "Configurações", url: "/profile/settings", icon: Settings },
 ];
 
 /**
