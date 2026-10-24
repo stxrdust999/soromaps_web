@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -8,16 +8,18 @@ import {
   toggleAchievementActiveAction,
   updateAchievementAction,
 } from "@/actions/achievements";
-import { ACHIEVEMENT_EVENTS } from "@/constants/achievements";
+import {
+  ACHIEVEMENT_EVENTS,
+  resolveAchievementIcon,
+} from "@/constants/achievements";
 import {
   type AchievementCriterion,
   formatCriterion,
 } from "@/helpers/achievement-criteria";
-import { listAchievements } from "@/http/achievements/achievements";
-import {
-  type AchievementMock,
-  achievementsMock,
-} from "@/mocks/admin-achievements";
+import type { listAchievementsResponse } from "@/http/achievements/achievements";
+import type { listCategoriesResponse } from "@/http/categories/categories";
+import type { listPlacesResponse } from "@/http/places/places";
+import type { AchievementMock } from "@/types/achievements";
 import type { AchievementFormSchema } from "@/validations/achievements";
 
 /** Quantas conquistas cada painel de calibragem mostra. */
@@ -29,13 +31,26 @@ const EVENT_NUMBER_TO_KEY: Record<number, AchievementMock["evento"]> = {
   1: "avaliar",
   2: "favoritar",
   3: "criar",
-  4: "avaliar", // fallback se 4 for comentar
+  4: "avaliar",
 };
 
-const TARGET_NUMBER_TO_KIND: Record<number, NonNullable<AchievementMock["tipoAlvo"]>> = {
+const TARGET_NUMBER_TO_KIND: Record<
+  number,
+  NonNullable<AchievementMock["tipoAlvo"]>
+> = {
   1: "categoria",
   2: "bairro",
 };
+
+const DEFAULT_NEIGHBORHOODS = [
+  "Centro",
+  "Santa Rosália",
+  "Vila Haro",
+  "Vila Hortência",
+  "Jardim Abaeté",
+  "Ipanema das Pedras",
+  "Vila Barcelona",
+];
 
 /**
  * Critério de uma conquista do catálogo, no formato que os helpers esperam.
@@ -62,48 +77,80 @@ export function describeCriterion(achievement: AchievementMock): string {
  * Gatilho correspondente ao evento da conquista.
  */
 export function triggerOf(achievement: AchievementMock) {
-  return ACHIEVEMENT_EVENTS[achievement.evento]?.trigger ?? "immediate";
+  return ACHIEVEMENT_EVENTS[achievement.evento]?.trigger ?? "metric";
+}
+
+interface UseAchievementsOptions {
+  achievementsPromise: Promise<listAchievementsResponse>;
+  categoriesPromise: Promise<listCategoriesResponse>;
+  placesPromise: Promise<listPlacesResponse>;
 }
 
 /**
- * Hook de catálogo e operações de conquistas, integrado com as Server Actions e fallback para mocks.
+ * Hook de catálogo e operações de conquistas, integrado com Streaming SSR (`React.use()`) e Server Actions.
  */
-export function useAchievements() {
-  const [achievements, setAchievements] =
-    useState<AchievementMock[]>(achievementsMock);
-  const [isLoading, setIsLoading] = useState(true);
+export function useAchievements({
+  achievementsPromise,
+  categoriesPromise,
+  placesPromise,
+}: UseAchievementsOptions) {
+  const achievementsResponse = use(achievementsPromise);
+  const categoriesResponse = use(categoriesPromise);
+  const placesResponse = use(placesPromise);
 
-  // Busca inicial da API
-  const refreshAchievements = useCallback(async () => {
-    try {
-      const res = await listAchievements({ PageSize: 100 });
-      if (res.status === 200 && res.data.items.length > 0) {
-        const mapped: AchievementMock[] = res.data.items.map((item) => ({
-          id: item.id,
-          nome: item.name,
-          descricao: item.description,
-          evento: EVENT_NUMBER_TO_KEY[item.eventType] ?? "visitar",
-          quantidade: Number(item.requiredQuantity),
-          tipoAlvo: item.targetType ? TARGET_NUMBER_TO_KIND[item.targetType] ?? null : null,
-          alvo: item.targetValue ?? null,
-          obtencoes: Number(item.holdersCount ?? 0),
-          raridade: Number(item.holdersPercentage ?? 0),
-          ativa: item.isActive,
-          icone: (item.icon as any) ?? "sparkles",
-          cor: item.color ?? "#000000",
-        }));
-        setAchievements(mapped);
-      }
-    } catch {
-      // Mantém fallback de mocks
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const initialAchievements = useMemo<AchievementMock[]>(() => {
+    const rawItems =
+      achievementsResponse.status === 200
+        ? achievementsResponse.data.items
+        : [];
+
+    return rawItems.map((item) => ({
+      id: item.id,
+      nome: item.name,
+      descricao: item.description,
+      evento: EVENT_NUMBER_TO_KEY[item.eventType] ?? "visitar",
+      quantidade: Number(item.requiredQuantity),
+      tipoAlvo: item.targetType
+        ? (TARGET_NUMBER_TO_KIND[item.targetType] ?? null)
+        : null,
+      alvo: item.targetValue ?? null,
+      obtencoes: Number(item.holdersCount ?? 0),
+      raridade: Number(item.holdersPercentage ?? 0),
+      ativa: item.isActive,
+      icone: resolveAchievementIcon(item.icon),
+      cor: item.color ?? "#1447e6",
+    }));
+  }, [achievementsResponse]);
+
+  const categories = useMemo<string[]>(() => {
+    const rawItems =
+      categoriesResponse.status === 200 ? categoriesResponse.data.items : [];
+    const names = rawItems.map((category) => category.name);
+    return names.length > 0 ? names : ["Cafeteria", "Gastronomia", "Parque"];
+  }, [categoriesResponse]);
+
+  const neighborhoods = useMemo<string[]>(() => {
+    const rawPlaces =
+      placesResponse.status === 200 ? placesResponse.data.items : [];
+    const uniqueNeighborhoods = Array.from(
+      new Set(
+        rawPlaces
+          .map((place) => place.neighborhood?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort((first, second) => first.localeCompare(second, "pt-BR"));
+
+    return uniqueNeighborhoods.length > 0
+      ? uniqueNeighborhoods
+      : DEFAULT_NEIGHBORHOODS;
+  }, [placesResponse]);
+
+  const [achievements, setAchievements] =
+    useState<AchievementMock[]>(initialAchievements);
 
   useEffect(() => {
-    refreshAchievements();
-  }, [refreshAchievements]);
+    setAchievements(initialAchievements);
+  }, [initialAchievements]);
 
   const stats = useMemo(
     () => ({
@@ -117,7 +164,10 @@ export function useAchievements() {
 
   /** Ordenado por obtenções, para os dois painéis de calibragem. */
   const byPopularity = useMemo(
-    () => [...achievements].sort((a, b) => b.obtencoes - a.obtencoes),
+    () =>
+      [...achievements].sort(
+        (first, second) => second.obtencoes - first.obtencoes,
+      ),
     [achievements],
   );
 
@@ -132,9 +182,9 @@ export function useAchievements() {
   const save = useCallback(
     async (values: AchievementFormSchema, id: string | null) => {
       if (id) {
-        const res = await updateAchievementAction(id, values);
-        if (!res.success) {
-          toast.error(res.message);
+        const response = await updateAchievementAction(id, values);
+        if (!response.success) {
+          toast.error(response.message);
           return false;
         }
 
@@ -143,13 +193,12 @@ export function useAchievements() {
             item.id === id ? { ...item, ...values } : item,
           ),
         );
-        refreshAchievements();
         return true;
       }
 
-      const res = await createAchievementAction(values);
-      if (!res.success) {
-        toast.error(res.message);
+      const response = await createAchievementAction(values);
+      if (!response.success) {
+        toast.error(response.message);
         return false;
       }
 
@@ -157,15 +206,14 @@ export function useAchievements() {
         ...current,
         {
           ...values,
-          id: res.achievementId ?? `a${current.length + 1}`,
+          id: response.achievementId ?? `a${current.length + 1}`,
           obtencoes: 0,
           raridade: 0,
         },
       ]);
-      refreshAchievements();
       return true;
     },
-    [refreshAchievements],
+    [],
   );
 
   const duplicate = useCallback(
@@ -185,9 +233,9 @@ export function useAchievements() {
         cor: source.cor,
       };
 
-      const res = await createAchievementAction(newValues);
-      if (!res.success) {
-        toast.error(res.message);
+      const response = await createAchievementAction(newValues);
+      if (!response.success) {
+        toast.error(response.message);
         return;
       }
 
@@ -195,33 +243,38 @@ export function useAchievements() {
         ...current,
         {
           ...newValues,
-          id: res.achievementId ?? `${source.id}-copia`,
+          id: response.achievementId ?? `${source.id}-copia`,
           obtencoes: 0,
           raridade: 0,
         },
       ]);
-      refreshAchievements();
     },
-    [achievements, refreshAchievements],
+    [achievements],
   );
 
-  const setActive = useCallback(
-    async (id: string, active: boolean) => {
-      const res = await toggleAchievementActiveAction(id, active);
-      if (!res.success) {
-        toast.error(res.message);
-        return;
-      }
+  const setActive = useCallback(async (id: string, active: boolean) => {
+    const response = await toggleAchievementActiveAction(id, active);
+    if (!response.success) {
+      toast.error(response.message);
+      return;
+    }
 
-      setAchievements((current) =>
-        current.map((item) =>
-          item.id === id ? { ...item, ativa: active } : item,
-        ),
-      );
-      refreshAchievements();
-    },
-    [refreshAchievements],
-  );
+    setAchievements((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, ativa: active } : item,
+      ),
+    );
+  }, []);
 
-  return { achievements, stats, calibration, isLoading, save, duplicate, setActive };
+  return {
+    achievements,
+    categories,
+    neighborhoods,
+    stats,
+    calibration,
+    save,
+    duplicate,
+    setActive,
+  };
 }
+

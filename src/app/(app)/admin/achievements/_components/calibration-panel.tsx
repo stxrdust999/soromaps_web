@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 
 import { triggerOf } from "./use-achievements";
 

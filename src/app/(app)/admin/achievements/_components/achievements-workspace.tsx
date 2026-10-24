@@ -9,8 +9,11 @@ import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ACHIEVEMENT_EVENTS } from "@/constants/achievements";
+import type { listAchievementsResponse } from "@/http/achievements/achievements";
+import type { listCategoriesResponse } from "@/http/categories/categories";
+import type { listPlacesResponse } from "@/http/places/places";
 import { cn } from "@/lib/utils";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 import type { AchievementFormSchema } from "@/validations/achievements";
 
 import { AchievementFormDialog } from "./achievement-form-dialog";
@@ -32,16 +35,36 @@ const TABS: { value: WorkspaceTab; label: string }[] = [
   { value: "calibragem", label: "Calibragem" },
 ];
 
+interface AchievementsWorkspaceProps {
+  achievementsPromise: Promise<listAchievementsResponse>;
+  categoriesPromise: Promise<listCategoriesResponse>;
+  placesPromise: Promise<listPlacesResponse>;
+}
+
 /**
- * Tela de conquistas inteira. É client porque não existe tabela `Conquista`
- * nem motor de concessão: criar, editar e desativar mexem só no array de
- * `src/mocks/admin-achievements.ts`.
- *
- * **Sem pontuação e sem nível** — decisão de 2026-08-12 no `CLAUDE.md`.
+ * Workspace administrativo de conquistas. Desempacota as Promises da API com `React.use()` via `useAchievements`
+ * e coordena catálogo, calibragem e diálogos de criação/edição.
  */
-export function AchievementsWorkspace() {
-  const { achievements, stats, calibration, save, duplicate, setActive } =
-    useAchievements();
+export function AchievementsWorkspace({
+  achievementsPromise,
+  categoriesPromise,
+  placesPromise,
+}: AchievementsWorkspaceProps) {
+  const {
+    achievements,
+    categories,
+    neighborhoods,
+    stats,
+    calibration,
+    save,
+    duplicate,
+    setActive,
+  } = useAchievements({
+    achievementsPromise,
+    categoriesPromise,
+    placesPromise,
+  });
+
 
   const [tab, setTab] = useState<WorkspaceTab>("catalogo");
   const [formOpen, setFormOpen] = useState(false);
@@ -192,6 +215,8 @@ export function AchievementsWorkspace() {
         open={formOpen}
         onOpenChange={setFormOpen}
         achievement={editing}
+        categories={categories}
+        neighborhoods={neighborhoods}
         onSubmit={handleSubmit}
         onPreviewUnlock={(values) =>
           setPreview({

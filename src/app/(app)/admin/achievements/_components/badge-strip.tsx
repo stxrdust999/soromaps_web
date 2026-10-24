@@ -1,7 +1,7 @@
 "use client";
 
 import { AchievementBadge } from "@/components/ui/achievement-badge";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 
 import { triggerOf } from "./use-achievements";
 

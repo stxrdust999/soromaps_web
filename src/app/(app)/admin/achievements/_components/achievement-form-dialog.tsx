@@ -51,13 +51,10 @@ import {
   TARGET_LABEL,
   TRIGGER_LABEL,
 } from "@/constants/achievements";
+import { estimateAchievementAction } from "@/actions/achievements";
 import { estimateReach, formatCriterion } from "@/helpers/achievement-criteria";
 import { cn } from "@/lib/utils";
-import {
-  ACHIEVEMENT_TARGET_NEIGHBORHOODS,
-  type AchievementMock,
-} from "@/mocks/admin-achievements";
-import { MODERATION_CATEGORIES } from "@/mocks/admin-moderation";
+import type { AchievementMock } from "@/types/achievements";
 import {
   type AchievementFormSchema,
   achievementFormSchema,
@@ -83,6 +80,8 @@ interface AchievementFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** `null` cria; conquista preenchida edita. */
   achievement: AchievementMock | null;
+  categories: string[];
+  neighborhoods: string[];
   onSubmit: (values: AchievementFormSchema) => void;
   onPreviewUnlock: (values: AchievementFormSchema) => void;
 }
@@ -92,18 +91,19 @@ export function AchievementFormDialog({
   open,
   onOpenChange,
   achievement,
+  categories,
+  neighborhoods,
   onSubmit,
   onPreviewUnlock,
 }: AchievementFormDialogProps) {
   const [iconQuery, setIconQuery] = useState("");
+  const [apiReach, setApiReach] = useState<number | null>(null);
 
   const form = useForm<AchievementFormSchema>({
     resolver: zodResolver(achievementFormSchema),
     defaultValues: EMPTY_FORM,
   });
 
-  // O diálogo não desmonta entre aberturas: sem o reset, "Nova conquista"
-  // abriria com o que sobrou da edição anterior.
   useEffect(() => {
     if (!open) return;
 
@@ -120,10 +120,13 @@ export function AchievementFormDialog({
             alvo: achievement.alvo,
             ativa: achievement.ativa,
           }
-        : EMPTY_FORM,
+        : {
+            ...EMPTY_FORM,
+            alvo: categories[0] ?? "Cafeteria",
+          },
     );
     setIconQuery("");
-  }, [open, achievement, form]);
+  }, [open, achievement, categories, form]);
 
   const values = form.watch();
   const definition = ACHIEVEMENT_EVENTS[values.evento];
@@ -137,12 +140,44 @@ export function AchievementFormDialog({
   };
 
   const phrase = formatCriterion(criterion);
-  const reach = estimateReach(criterion);
+
+  useEffect(() => {
+    if (!open || !phrase) {
+      setApiReach(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = setTimeout(async () => {
+      const response = await estimateAchievementAction({
+        evento: values.evento,
+        quantidade: values.quantidade,
+        tipoAlvo: values.tipoAlvo,
+        alvo: values.alvo,
+      });
+
+      if (!cancelled && response)
+        setApiReach(Number(response.estimatedEligibleCount ?? 0));
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [
+    open,
+    phrase,
+    values.evento,
+    values.quantidade,
+    values.tipoAlvo,
+    values.alvo,
+  ]);
+
+  const reach = phrase ? (apiReach ?? estimateReach(criterion)) : null;
 
   const targetOptions =
-    values.tipoAlvo === "bairro"
-      ? ACHIEVEMENT_TARGET_NEIGHBORHOODS
-      : MODERATION_CATEGORIES;
+    values.tipoAlvo === "bairro" ? neighborhoods : categories;
+
 
   const icons = ACHIEVEMENT_ICON_KEYS.filter((key) =>
     key.includes(iconQuery.trim().toLowerCase()),
@@ -369,9 +404,9 @@ export function AchievementFormDialog({
                           form.setValue(
                             "alvo",
                             kind === "bairro"
-                              ? ACHIEVEMENT_TARGET_NEIGHBORHOODS[0]
+                              ? (neighborhoods[0] ?? null)
                               : kind === "categoria"
-                                ? MODERATION_CATEGORIES[0]
+                                ? (categories[0] ?? null)
                                 : null,
                           );
                         }}

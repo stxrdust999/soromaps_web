@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TRIGGER_LABEL } from "@/constants/achievements";
 import { cn } from "@/lib/utils";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 import { textSortingFn } from "@/utils/sorts/sort-by-text";
 
 import { describeCriterion, triggerOf } from "./use-achievements";
@@ -293,11 +293,14 @@ export function createAchievementColumns({
         ),
 
       filterFn: (row, _columnId, value) => {
+        if (!value) return true;
         const { obtencoes, raridade } = row.original;
 
         if (value === "zero") return obtencoes === 0;
         if (value === "rara") return obtencoes > 0 && raridade < 10;
-        return raridade > 50;
+        if (value === "moderada") return raridade >= 10 && raridade <= 50;
+        if (value === "comum") return raridade > 50;
+        return true;
       },
 
       meta: {
