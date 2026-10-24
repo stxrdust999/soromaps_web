@@ -9,27 +9,63 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  type ExplorerStats,
   isVerifiedExplorer,
   MIN_MONTHS,
   MIN_REVIEWS,
   MIN_VISITS,
   missingForVerification,
 } from "@/constants/verification";
-import { currentExplorerMock } from "@/mocks/community";
+import type { UserVerificationStatusDto } from "@/http/api.schemas";
+
+interface VerificationCardProps {
+  verificationStatus?: UserVerificationStatusDto | null;
+  fallbackStats?: ExplorerStats | null;
+}
+
+function parseNumeric(value: number | string | null | undefined, fallback = 0): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
 
 /**
  * O que é o selo e onde o usuário está em relação a ele.
- *
- * O critério aparece inteiro de propósito: selo cujo critério não se lê vira
- * fofoca — quem não tem acha que é escolha da equipe. Como a régua é função
- * pura sobre contadores, dá para publicá-la sem ressalva.
  */
-export function VerificationCard() {
-  const verified = isVerifiedExplorer(currentExplorerMock);
-  const missing = missingForVerification(currentExplorerMock);
+export function VerificationCard({
+  verificationStatus,
+  fallbackStats,
+}: VerificationCardProps) {
+  const stats: ExplorerStats = verificationStatus
+    ? {
+        visitas: parseNumeric(verificationStatus.visitsCount, 0),
+        avaliacoes: parseNumeric(verificationStatus.publishedReviewsCount, 0),
+        avaliacoesRemovidas: parseNumeric(
+          verificationStatus.removedReviewsCount,
+          0,
+        ),
+        mesesNaPlataforma: Math.floor(
+          parseNumeric(verificationStatus.accountAgeDays, 0) / 30,
+        ),
+      }
+    : (fallbackStats ?? {
+        visitas: 0,
+        avaliacoes: 0,
+        avaliacoesRemovidas: 0,
+        mesesNaPlataforma: 0,
+      });
+
+  const verified = verificationStatus
+    ? Boolean(verificationStatus.isVerified)
+    : isVerifiedExplorer(stats);
+  const missing = missingForVerification(stats);
 
   return (
     <Card size="sm" className="gap-3">
+      {/* header - title */}
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BadgeCheckIcon className="size-4 fill-sky-500 text-white" />
@@ -40,6 +76,7 @@ export function VerificationCard() {
         </CardDescription>
       </CardHeader>
 
+      {/* criteria - status */}
       <CardContent className="flex flex-col gap-3">
         <ul className="flex flex-col gap-1 text-muted-foreground text-xs">
           <li>· {MIN_VISITS} visitas registradas</li>
