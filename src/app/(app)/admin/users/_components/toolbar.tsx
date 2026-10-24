@@ -1,11 +1,24 @@
 "use client";
 
 import type { Table } from "@tanstack/react-table";
-import { ClockIcon, MailIcon, MapPinIcon, ShieldIcon, UserSearchIcon } from "lucide-react";
+import {
+  ClockIcon,
+  MailIcon,
+  MapPinIcon,
+  ShieldAlertIcon,
+  ShieldIcon,
+  UserIcon,
+  UserSearchIcon,
+} from "lucide-react";
 import { useCallback } from "react";
 
 import { ColumnVisibilityFilter } from "@/components/table/column-visibility-filter";
-import { DateFilterChip, TextFilterChip } from "@/components/table/filter-chip";
+import {
+  DateFilterChip,
+  type SelectFilterChipOption,
+  SelectFilterChip,
+  TextFilterChip,
+} from "@/components/table/filter-chip";
 import { FilterChipsScrollArea } from "@/components/table/filter-chips-scroll-area";
 import { FilterResetButton } from "@/components/table/filter-reset-button";
 import type { UserResource } from "@/types/user";
@@ -17,6 +30,11 @@ import { userColumnsNames } from "./columns";
 interface UserListTableToolbarProps {
   table: Table<UserResource>;
 }
+
+const ROLE_OPTIONS: SelectFilterChipOption[] = [
+  { value: "user", label: "Explorador", icon: <UserIcon className="size-4" /> },
+  { value: "admin", label: "Administrador", icon: <ShieldAlertIcon className="size-4" /> },
+];
 
 export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
   const nameColumn = table.getColumn("name");
@@ -54,11 +72,12 @@ export function UserListTableToolbar({ table }: UserListTableToolbarProps) {
         )}
 
         {roleColumn && (
-          <TextFilterChip
+          <SelectFilterChip
             table={table}
             column={roleColumn}
             icon={<ShieldIcon className="size-4" />}
             label={userColumnsNames.role}
+            options={ROLE_OPTIONS}
           />
         )}
 
