@@ -1,52 +1,51 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { use, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { RemovalDialog } from "@/components/blocks/removal-dialog";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import type { RemovalReason } from "@/constants/content-removal";
-import type { ReviewMock } from "@/mocks/admin-reviews";
+import type { adminListReviewsResponse } from "@/http/admin-reviews/admin-reviews";
+import type { ReviewMock } from "@/types/reviews";
 
 import { ReviewsStats } from "./reviews-stats";
 import { ReviewsTable } from "./reviews-table";
-import { useReviews } from "./use-reviews";
+import { mapAdminReviewDtoToMock, useReviews } from "./use-reviews";
 
-/** Alvo da remoção: uma avaliação da linha, ou o lote selecionado. */
 interface PendingRemoval {
   reviews: ReviewMock[];
-  /** Limpa a seleção da tabela depois que o lote sai. */
   clearSelection?: () => void;
 }
 
+interface ReviewsWorkspaceProps {
+  promises: {
+    reviewsPromise: Promise<adminListReviewsResponse>;
+  };
+}
+
 /**
- * Listagem administrativa de avaliações.
- *
- * É a única tela que vê avaliação **fora** do contexto do local — o
- * estabelecimento vê só as do próprio ponto e a moderação só as denunciadas.
- * Por isso as ações de pivotar por autor e por local importam tanto quanto a
- * remoção: padrão de nota anômalo não aparece lendo uma linha por vez.
- *
- * É client porque `Analise` não existe no banco: remover só troca o `status`
- * no array de `src/mocks/admin-reviews.ts`.
+ * Listagem administrativa de avaliações integrada via Streaming SSR (`use()` + `useMemo()`).
  */
-export function ReviewsWorkspace() {
-  const { reviews, signalsById, stats, remove, restore } = useReviews();
+export function ReviewsWorkspace({ promises }: ReviewsWorkspaceProps) {
+  const reviewsResponse = use(promises.reviewsPromise);
+
+  const initialReviews = useMemo<ReviewMock[]>(() => {
+    if (reviewsResponse.status === 200 && reviewsResponse.data.items)
+      return reviewsResponse.data.items.map(mapAdminReviewDtoToMock);
+    return [];
+  }, [reviewsResponse]);
+
+  const { reviews, signalsById, stats, remove } = useReviews(initialReviews);
 
   const [pending, setPending] = useState<PendingRemoval | null>(null);
 
   const actions = useMemo(
     () => ({
       onRemove: (review: ReviewMock) => setPending({ reviews: [review] }),
-      onRestore: (review: ReviewMock) => {
-        restore(review.id);
-        toast.success("Avaliação restaurada", {
-          description: "Voltou para a vitrine do local.",
-        });
-      },
     }),
-    [restore],
+    [],
   );
 
   const onRemoveSelected = useCallback(
@@ -78,6 +77,7 @@ export function ReviewsWorkspace() {
 
   return (
     <main className="flex flex-1 flex-col">
+      {/* reviews - section */}
       <PageSection
         title="Avaliações"
         description="Todas as avaliações da plataforma, fora do contexto do local"

@@ -10,38 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableHeader } from "@/components/ui/table";
 import { useTableConfig } from "@/hooks/table/use-table-config";
 import { cn } from "@/lib/utils";
-import type { ReviewMock } from "@/mocks/admin-reviews";
+import type { ReviewMock } from "@/types/reviews";
 
 import { createReviewColumns, type ReviewRowActions } from "./columns";
 import { ReviewRow } from "./review-row";
 import { ReviewsToolbar } from "./toolbar";
 import type { ReviewSignal } from "./use-reviews";
 
-/** As ações que a tela de fora fornece; as de pivô nascem aqui dentro. */
-type OwnerActions = Pick<ReviewRowActions, "onRemove" | "onRestore">;
+type OwnerActions = Pick<ReviewRowActions, "onRemove">;
 
 interface ReviewsTableProps {
   reviews: ReviewMock[];
   signalsById: Map<string, ReviewSignal[]>;
-
-  /** ⚠️ Precisa chegar memoizado — TanStack compara colunas por referência. */
   actions: OwnerActions;
-
-  /** Remoção em lote das linhas selecionadas. */
   onRemoveSelected: (reviews: ReviewMock[], clearSelection: () => void) => void;
 }
 
 /**
- * Orquestrador da listagem.
- *
- * As ações de "ver todas deste autor/local" moram aqui porque são filtro de
- * coluna, não navegação: transformam a linha numa lente sobre o conjunto, que
- * é o que `docs/todo/admin/reviews.md` pede ao dizer que o padrão anômalo só
- * aparece olhando o todo.
- *
- * Elas leem a tabela por `ref` porque precisam da instância que só existe
- * depois das colunas — passar `config.table` como dependência de `useMemo`
- * fecharia o ciclo e remontaria a tabela a cada render.
+ * Orquestrador da tabela administrativa de avaliações.
  */
 export function ReviewsTable({
   reviews,
@@ -82,7 +68,7 @@ export function ReviewsTable({
     data: reviews,
     columns,
     defaultSorting: [{ id: "diasPublicado", desc: false }],
-    perPage: 20,
+    perPage: 10,
     getRowId: (row) => row.id,
   });
 

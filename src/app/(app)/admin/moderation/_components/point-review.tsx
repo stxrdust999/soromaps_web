@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   CheckIcon,
   CornerUpLeftIcon,
@@ -13,7 +14,7 @@ import {
   MODERATION_STATUS_LABEL,
   type ModerationAuthorMock,
   type ModerationItemMock,
-} from "@/mocks/admin-moderation";
+} from "@/types/moderation";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { AuthorCard } from "./author-card";
@@ -36,7 +37,9 @@ interface PointReviewProps {
   onCompare: () => void;
 }
 
-/** Painel da direita: tudo que sustenta a decisão, e a decisão em si. */
+/**
+ * Painel da direita: tudo que sustenta a decisão de moderação e os controles de ação.
+ */
 export function PointReview({
   item,
   author,
@@ -45,9 +48,12 @@ export function PointReview({
   onReject,
   onCompare,
 }: PointReviewProps) {
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const activePhotoUrl = item.photoUrls?.[selectedPhotoIndex] ?? item.photoUrls?.[0];
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-auto px-8 pt-7 pb-9">
+        {/* header - summary */}
         <div className="flex items-start justify-between gap-6">
           <div>
             <p className="text-muted-foreground text-sm">
@@ -64,6 +70,7 @@ export function PointReview({
           </Badge>
         </div>
 
+        {/* duplicate alert - banner */}
         {item.duplicata && (
           <div className="border-warning/40 bg-warning/10 text-warning flex items-center gap-3.5 rounded-lg border p-3">
             <TriangleAlertIcon size={16} className="shrink-0" />
@@ -85,29 +92,47 @@ export function PointReview({
           </div>
         )}
 
+        {/* media and map - grid */}
         <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
           <div className="flex flex-col gap-2.5">
             <span className="text-muted-foreground text-sm">Foto enviada</span>
 
             {item.fotos > 0 ? (
               <>
-                <div className="bg-muted text-muted-foreground flex h-53 items-center justify-center rounded-lg font-mono text-xs">
-                  {item.id}-01.jpg · 1600×1200
+                <div className="bg-muted text-muted-foreground flex h-53 items-center justify-center rounded-lg font-mono text-xs overflow-hidden">
+                  {activePhotoUrl ? (
+                    <img
+                      src={activePhotoUrl}
+                      alt={item.nome}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    `${item.id}-01.jpg · 1600×1200`
+                  )}
                 </div>
 
-                <div className="flex gap-2">
-                  {Array.from(
-                    { length: item.fotos - 1 },
-                    (_, index) => `0${index + 2}`,
-                  ).map((slot) => (
-                    <div
-                      key={slot}
-                      className="bg-muted text-muted-foreground flex size-13 items-center justify-center rounded-md font-mono text-[9px]"
-                    >
-                      {slot}
-                    </div>
-                  ))}
-                </div>
+                {item.photoUrls && item.photoUrls.length > 1 && (
+                  <div className="flex gap-2">
+                    {item.photoUrls.map((url, index) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => setSelectedPhotoIndex(index)}
+                        className={`overflow-hidden size-13 rounded-md border-2 transition-all ${
+                          selectedPhotoIndex === index
+                            ? "border-primary"
+                            : "border-transparent opacity-70 hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          src={url}
+                          alt={`${item.nome} - miniatura ${index + 1}`}
+                          className="size-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-muted-foreground flex h-53 flex-col items-center justify-center gap-2 rounded-lg border border-dashed">
@@ -144,12 +169,14 @@ export function PointReview({
           </div>
         </div>
 
+        {/* fields and author - grid */}
         <div className="grid items-start gap-6 lg:grid-cols-[1.45fr_1fr]">
           <PointFields campos={item.campos} />
           <AuthorCard author={author} />
         </div>
       </div>
 
+      {/* actions - footer */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-8 py-3.5">
         <Button onClick={onApprove}>
           <CheckIcon />
