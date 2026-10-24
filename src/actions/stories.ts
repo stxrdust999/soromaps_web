@@ -1,13 +1,91 @@
 "use server";
 
-import { type GeminiSchema, geminiModel, generateJson } from "@/lib/gemini";
-import { getMarkerDetailsMock } from "@/mocks/markers";
+import { updateTag } from "next/cache";
+
+import { FEED_LIST_TAG, STORIES_LIST_TAG, storyShowTag } from "@/constants/reports";
+import { getApiErrorMessage } from "@/helpers/api-error";
+import { getPlaceById, listPlaces } from "@/http/places/places";
+import { createStory, publishStory } from "@/http/stories/stories";
+import {
+  type GeminiSchema,
+  geminiModelDisplayName,
+  generateJson,
+} from "@/lib/gemini";
 import type { FormState } from "@/types/form";
 import {
   generateStorySchema,
+  publishStorySchema,
+  type PublishStorySchema,
   type StoryDraftSchema,
   storyDraftSchema,
 } from "@/validations/stories";
+
+/**
+ * Remove acentuação e converte string para caixa baixa facilitando comparações flexíveis.
+ */
+function cleanAccents(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Distância de Levenshtein para medir erros de digitação e pequenas divergências de grafia.
+ */
+function calculateLevenshteinDistance(source: string, target: string): number {
+  if (source === target) return 0;
+  if (source.length === 0) return target.length;
+  if (target.length === 0) return source.length;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= source.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= target.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= source.length; i++) {
+    for (let j = 1; j <= target.length; j++) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return matrix[source.length][target.length];
+}
+
+/**
+ * Avalia se um texto corresponde a uma consulta com tolerância a acentos e pequenas discrepâncias.
+ */
+function isFuzzyMatch(candidateText: string, searchTerm: string): boolean {
+  const cleanCandidate = cleanAccents(candidateText);
+  const cleanQuery = cleanAccents(searchTerm);
+
+  if (cleanCandidate.includes(cleanQuery)) return true;
+
+  const queryTokens = cleanQuery.split(/\s+/).filter(Boolean);
+  const allTokensMatched = queryTokens.every((token) =>
+    cleanCandidate.includes(token),
+  );
+  if (allTokensMatched) return true;
+
+  const candidateWords = cleanCandidate.split(/[\s,.-]+/).filter(Boolean);
+  for (const token of queryTokens) {
+    if (token.length >= 3) {
+      for (const word of candidateWords) {
+        if (Math.abs(word.length - token.length) <= 2) {
+          const distance = calculateLevenshteinDistance(word, token);
+          if (distance <= 1) return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
 
 /**
  * Geração de pauta.
@@ -35,7 +113,7 @@ import {
 const INVALID_PAYLOAD_MESSAGE =
   "Confira o tema e os lugares escolhidos antes de gerar.";
 const MISSING_KEY_MESSAGE =
-  "Sem `GEMINI_API_KEY` configurada no servidor — a geração está desligada.";
+  "O serviço de geração inteligente está temporariamente indisponível. Tente novamente mais tarde.";
 const REQUEST_FAILED_MESSAGE =
   "O modelo não respondeu. Tente de novo em alguns instantes.";
 const MALFORMED_MESSAGE =
@@ -76,32 +154,104 @@ const DRAFT_SCHEMA: GeminiSchema = {
  * @param id Id do lugar no catálogo.
  * @returns Bloco de texto com os fatos, ou `null` se o id não existe.
  */
-function placeFacts(id: number): string | null {
-  const details = getMarkerDetailsMock(id);
-
-  if (!details) return null;
-
-  const lines = [
-    `- Nome: ${details.nome}`,
-    `- Bairro: ${details.bairro}`,
-    `- Categoria: ${details.categoria}`,
-    `- Características: ${details.tags.join(", ")}`,
-    `- Wi-fi: ${details.temWifi ? "tem" : "não tem"}`,
-    `- Aceita pet: ${details.petFriendly ? "sim" : "não"}`,
-    `- Nota: ${details.nota} em ${details.totalAvaliacoes} avaliações`,
-    `- Resumo: ${details.sobre}`,
-    `- Descrição: ${details.descricao}`,
-  ];
-
-  if (details.melhorHorario) {
-    lines.push(`- Melhor horário: ${details.melhorHorario}`);
+async function placeFacts(id: string): Promise<string | null> {
+  try {
+    const response = await getPlaceById(id);
+    if (response.status === 200) {
+      const place = response.data;
+      const lines = [
+        `- Nome: ${place.name}`,
+        `- Bairro: ${place.neighborhood ?? "Sorocaba"}`,
+        `- Categoria: ${place.category.name}`,
+        `- Características: ${place.tags.map((tag) => tag.name).join(", ")}`,
+        `- Wi-fi: ${place.hasWifi ? "tem" : "não tem"}`,
+        `- Aceita pet: ${place.isPetFriendly ? "sim" : "não"}`,
+        `- Nota: ${Number(place.ratingAverage).toFixed(1)} em ${place.reviewsCount} avaliações`,
+        `- Resumo: ${place.about ?? ""}`,
+        `- Descrição: ${place.description || place.about || ""}`,
+      ];
+      return lines.join("\n");
+    }
+  } catch (error) {
+    console.error("placeFacts error:", error);
   }
 
-  if (details.segredoLocal) {
-    lines.push(`- Dica de quem frequenta: ${details.segredoLocal}`);
-  }
+  return null;
+}
 
-  return lines.join("\n");
+export interface PlaceStoryItem {
+  id: string;
+  nome: string;
+  bairro: string;
+  categoria: string;
+  nota: number;
+  avaliacoes: number;
+  fotoUrl: string | null;
+  sobre: string;
+}
+
+/**
+ * Busca ou sugere locais aprovados para compor uma pauta editorial.
+ * Oferece sugestões aleatórias/populares quando a busca estiver vazia
+ * e filtragem com tolerância fonética e a acentos conforme o usuário digita.
+ */
+export async function searchPlacesForStoryAction(
+  query: string,
+): Promise<PlaceStoryItem[]> {
+  const trimmedQuery = query.trim();
+
+  try {
+    const response = await listPlaces({
+      Search: trimmedQuery.length > 0 ? trimmedQuery : undefined,
+      PageSize: 20,
+    });
+
+    if (response.status !== 200 || !response.data.items) {
+      return [];
+    }
+
+    const items = response.data.items;
+
+    if (!trimmedQuery) {
+      return items.slice(0, 6).map((item) => ({
+        id: item.id,
+        nome: item.name,
+        bairro: item.neighborhood ?? "Sorocaba",
+        categoria: item.category.name,
+        nota: Number(item.ratingAverage) || 0,
+        avaliacoes: Number(item.reviewsCount) || 0,
+        fotoUrl: item.coverPhotoUrl ?? null,
+        sobre: item.about ?? "",
+      }));
+    }
+
+    const filtered = items.filter((item) => {
+      const matchName = isFuzzyMatch(item.name, trimmedQuery);
+      const matchAbout = isFuzzyMatch(item.about ?? "", trimmedQuery);
+      const matchNeighborhood = isFuzzyMatch(
+        item.neighborhood ?? "",
+        trimmedQuery,
+      );
+      const matchCategory = isFuzzyMatch(item.category.name, trimmedQuery);
+      return matchName || matchAbout || matchNeighborhood || matchCategory;
+    });
+
+    const results = filtered.length > 0 ? filtered : items;
+
+    return results.slice(0, 8).map((item) => ({
+      id: item.id,
+      nome: item.name,
+      bairro: item.neighborhood ?? "Sorocaba",
+      categoria: item.category.name,
+      nota: Number(item.ratingAverage) || 0,
+      avaliacoes: Number(item.reviewsCount) || 0,
+      fotoUrl: item.coverPhotoUrl ?? null,
+      sobre: item.about ?? "",
+    }));
+  } catch (error) {
+    console.error("searchPlacesForStoryAction error:", error);
+    return [];
+  }
 }
 
 export interface StoryDraftState extends FormState {
@@ -121,7 +271,7 @@ export async function generateStoryDraftAction(
 ): Promise<StoryDraftState> {
   const result = generateStorySchema.safeParse({
     tema: data.get("tema"),
-    localIds: data.getAll("localIds").map(Number),
+    localIds: data.getAll("localIds").map(String),
   });
 
   if (!result.success) {
@@ -132,9 +282,9 @@ export async function generateStoryDraftAction(
     };
   }
 
-  const facts = result.data.localIds
-    .map(placeFacts)
-    .filter((block): block is string => block !== null);
+  const factPromises = result.data.localIds.map(placeFacts);
+  const factsResolved = await Promise.all(factPromises);
+  const facts = factsResolved.filter((block): block is string => block !== null);
 
   if (facts.length < result.data.localIds.length) {
     return { success: false, message: INVALID_PAYLOAD_MESSAGE, errors: null };
@@ -172,6 +322,130 @@ ${facts.join("\n\n")}`,
     message: "Rascunho gerado. Revise antes de publicar.",
     errors: null,
     draft: draft.data,
-    modelo: geminiModel(),
+    modelo: geminiModelDisplayName(),
   };
+}
+
+/**
+ * Cria e opcionalmente publica uma pauta editorial com locais associados.
+ */
+export async function createStoryAction(
+  rawInput: PublishStorySchema,
+): Promise<FormState & { storySlug?: string }> {
+  const result = publishStorySchema.safeParse(rawInput);
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: "Verifique os campos da pauta antes de prosseguir.",
+      errors: result.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  const { publishImmediately, ...storyData } = result.data;
+
+  try {
+    const createResponse = await createStory({
+      slug: storyData.slug,
+      title: storyData.title,
+      subtitle: storyData.subtitle,
+      neighborhood: storyData.neighborhood ?? null,
+      introText: storyData.introText,
+      closingText: storyData.closingText ?? null,
+      origin: 0,
+      places: storyData.places.map((place, index) => ({
+        placeId: place.placeId,
+        sortOrder: index + 1,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? null,
+      })),
+    });
+
+    if (createResponse.status !== 201) {
+      return {
+        success: false,
+        message: getApiErrorMessage(
+          createResponse.data,
+          "Não foi possível salvar a pauta.",
+        ),
+        errors: null,
+      };
+    }
+
+    const createdStory = createResponse.data;
+
+    if (publishImmediately) {
+      const publishResponse = await publishStory(createdStory.id);
+      if (publishResponse.status !== 200) {
+        updateTag(STORIES_LIST_TAG);
+        return {
+          success: true,
+          message:
+            "Pauta salva como rascunho. Porém, ocorreu um erro ao publicá-la automaticamente.",
+          errors: null,
+          storySlug: createdStory.slug,
+        };
+      }
+    }
+
+    updateTag(STORIES_LIST_TAG);
+    updateTag(FEED_LIST_TAG);
+
+    return {
+      success: true,
+      message: publishImmediately
+        ? "Pauta publicada com sucesso para a comunidade!"
+        : "Rascunho da pauta salvo com sucesso!",
+      errors: null,
+      storySlug: createdStory.slug,
+    };
+  } catch (error) {
+    console.error("createStoryAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+}
+
+/**
+ * Publica uma pauta existente em rascunho e atualiza o cache da comunidade e feed.
+ */
+export async function publishStoryAction(
+  id: string,
+  slug: string,
+): Promise<FormState> {
+  try {
+    const response = await publishStory(id);
+
+    if (response.status !== 200) {
+      return {
+        success: false,
+        message: getApiErrorMessage(
+          response.data,
+          "Não foi possível publicar a pauta.",
+        ),
+        errors: null,
+      };
+    }
+
+    updateTag(storyShowTag(slug));
+    updateTag(STORIES_LIST_TAG);
+    updateTag(FEED_LIST_TAG);
+
+    return {
+      success: true,
+      message: "Pauta publicada com sucesso para toda a comunidade!",
+      errors: null,
+    };
+  } catch (error) {
+    console.error("publishStoryAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
 }
