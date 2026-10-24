@@ -1,19 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 import { dismissReportsAction } from "@/actions/reports";
-import { listAdminGroupedReports } from "@/http/reports/reports";
-
-import {
-  type FeedbackMock,
-  type FeedbackStatus,
-  feedbackMock,
-  type ReportCaseMock,
-  type ReportReason,
-  reportCasesMock,
-  reportedAuthorsMock,
-} from "@/mocks/admin-reports";
+import { removeContentAction } from "@/actions/reviews";
+import type { listAdminFeedbackResponse } from "@/http/feedback/feedback";
+import type { listAdminGroupedReportsResponse } from "@/http/reports/reports";
+import type {
+  FeedbackKind,
+  FeedbackMock,
+  FeedbackStatus,
+  ReportCaseMock,
+  ReportReason,
+  ReportTargetKind,
+} from "@/types/reports";
 
 /**
  * Abaixo disto a conta é recém-criada. Três dias cobre a janela em que uma
@@ -33,15 +33,35 @@ export interface ReportSignal {
   tone: "bad" | "warn" | "neutral";
 }
 
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function daysSince(isoDate: string): number {
+  const timestamp = new Date(isoDate).getTime();
+  if (Number.isNaN(timestamp)) return 0;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+}
+
+function normalizeReason(rawReason: string): ReportReason {
+  const normalized = rawReason.trim().toLowerCase();
+  if (normalized.includes("spam")) return "spam";
+  if (normalized.includes("ofens") || normalized.includes("odio"))
+    return "ofensa";
+  if (normalized.includes("fals") || normalized.includes("fake"))
+    return "falsa";
+  if (normalized.includes("escop") || normalized.includes("fora"))
+    return "escopo";
+  return "improprio";
+}
+
 /**
- * Sinais de risco do caso.
- *
- * O de coordenação é o que impede a fila de virar arma: cinco contas criadas
- * ontem reportando o mesmo alvo com o mesmo motivo não é a comunidade
- * sinalizando, e tratar isso como sinal legítimo derruba conteúdo legítimo.
- *
- * @param report Caso agrupado por alvo.
- * @returns Sinais em ordem de gravidade.
+ * Sinais de risco do caso agrupado por alvo.
  */
 export function getReportSignals(report: ReportCaseMock): ReportSignal[] {
   const signals: ReportSignal[] = [];
@@ -63,7 +83,7 @@ export function getReportSignals(report: ReportCaseMock): ReportSignal[] {
     });
   }
 
-  if (reportedAuthorsMock[report.autorId].conteudoRemovido > 0) {
+  if (report.autor.conteudoRemovido > 0) {
     signals.push({
       kind: "reincidente",
       label: "Autor reincidente",
@@ -71,7 +91,9 @@ export function getReportSignals(report: ReportCaseMock): ReportSignal[] {
     });
   }
 
-  const reasons = new Set(report.denunciantes.map((r) => r.motivo));
+  const reasons = new Set(
+    report.denunciantes.map((reporter) => reporter.motivo),
+  );
   if (reasons.size > 1) {
     signals.push({
       kind: "divergente",
@@ -92,12 +114,6 @@ export interface ReasonTally {
 
 /**
  * Motivos somados, do mais citado ao menos.
- *
- * Motivos convergentes indicam problema real no conteúdo; divergentes
- * costumam indicar desavença pessoal entre quem reporta e quem escreveu.
- *
- * @param report Caso agrupado por alvo.
- * @returns Contagem por motivo, decrescente.
  */
 export function tallyReasons(report: ReportCaseMock): ReasonTally[] {
   const counts = new Map<ReportReason, number>();
@@ -106,10 +122,10 @@ export function tallyReasons(report: ReportCaseMock): ReasonTally[] {
     counts.set(reporter.motivo, (counts.get(reporter.motivo) ?? 0) + 1);
   }
 
-  const total = report.denunciantes.length;
+  const total = Math.max(report.denunciantes.length, 1);
 
   return [...counts.entries()]
-    .sort(([, a], [, b]) => b - a)
+    .sort(([, first], [, second]) => second - first)
     .map(([motivo, count]) => ({
       motivo,
       total: count,
@@ -147,7 +163,7 @@ function matchesFilters(report: ReportCaseMock, filters: QueueFilters) {
 
   if (
     filters.motivo &&
-    !report.denunciantes.some((r) => r.motivo === filters.motivo)
+    !report.denunciantes.some((reporter) => reporter.motivo === filters.motivo)
   ) {
     return false;
   }
@@ -163,68 +179,136 @@ function matchesFilters(report: ReportCaseMock, filters: QueueFilters) {
   return true;
 }
 
+interface UseReportsOptions {
+  reportsPromise: Promise<listAdminGroupedReportsResponse>;
+  feedbackPromise: Promise<listAdminFeedbackResponse>;
+}
+
 /**
- * Estado da caixa de entrada. Nem `Denuncia` nem `Feedback` existem no banco:
- * encerrar um caso apenas o tira do array local, e triar feedback só troca o
- * `status`.
- *
- * Quando as entidades existirem, isto vira `src/http/reports` + Server
- * Actions, e a remoção de conteúdo precisa ser **a mesma action** consumida
- * por `/admin/reviews` — senão as regras divergem entre as duas telas.
+ * Hook de estado da caixa de entrada de denúncias e feedback, desempacotando Promises via `React.use()`.
  */
-export function useReports() {
-  const [reports, setReports] = useState(reportCasesMock);
-  const [feedback, setFeedback] = useState(feedbackMock);
+export function useReports({
+  reportsPromise,
+  feedbackPromise,
+}: UseReportsOptions) {
+  const reportsResponse = use(reportsPromise);
+  const feedbackResponse = use(feedbackPromise);
 
-  const [filters, setFilters] = useState<QueueFilters>(EMPTY_FILTERS);
-  const [selectedId, setSelectedId] = useState<string | null>("r1");
+  const initialReports = useMemo<ReportCaseMock[]>(() => {
+    const rawItems =
+      reportsResponse.status === 200 ? reportsResponse.data.items : [];
 
-  // Carrega casos da API quando disponível
-  const fetchReports = useCallback(async () => {
-    try {
-      const res = await listAdminGroupedReports({ PageSize: 50 });
-      if (res.status === 200 && res.data.items.length > 0) {
-        const mapped: ReportCaseMock[] = res.data.items.map((item) => {
-          const kindMap: Record<number, ReportCaseMock["alvoTipo"]> = {
-            0: "ponto",
-            1: "avaliacao",
-            2: "comentario",
-          };
+    const kindMap: Record<number, ReportTargetKind> = {
+      0: "ponto",
+      1: "avaliacao",
+      2: "comentario",
+      3: "perfil",
+    };
+
+    return rawItems.map((item) => {
+      const targetTypeEnum = Number(
+        item.target?.targetType ?? item.targetType ?? 0,
+      );
+      const alvoTipo = kindMap[targetTypeEnum] ?? "ponto";
+      const authorName = item.target?.author?.name ?? "Explorador";
+      const totalReporters = Math.max(
+        Number(item.reportersCount ?? 0),
+        item.reasons.length,
+        1,
+      );
+      const diasAberto = daysSince(item.firstReportedAt);
+
+      const denunciantes = Array.from({ length: totalReporters }).map(
+        (_, index) => {
+          const reasonText =
+            item.reasons[index % Math.max(item.reasons.length, 1)] ??
+            "improprio";
           return {
-            id: `api-report-${item.targetId}`,
-            alvoTipo: kindMap[item.target?.targetType ?? 0] ?? "ponto",
-            alvoNome: item.target?.title ?? "Conteúdo denunciado",
-            autorId: "jorge",
-            conteudo: {
-              corpo: item.target?.content ?? "",
-              local: item.target?.subtitle ?? "Sorocaba",
-            },
-            trecho: item.target?.content ?? "",
-            diasAberto: 1,
-            denunciantes: item.reasons.map((r, rIdx) => ({
-              id: rIdx + 1,
-              nome: `Denunciante ${rIdx + 1}`,
-              iniciais: "D",
-              motivo: "inapropriado" as ReportReason,
-              detalhe: `${r}`,
-              diasAtras: 1,
-              quando: "hoje",
-              diasDeConta: 30,
-            })),
+            nome: `Denunciante ${index + 1}`,
+            iniciais: `D${index + 1}`,
+            motivo: normalizeReason(reasonText),
+            quando: diasAberto === 0 ? "hoje" : `há ${diasAberto}d`,
+            membroDesde: "membro verificado",
           };
-        });
+        },
+      );
 
-        setReports(mapped);
-        setSelectedId(mapped[0]?.id ?? null);
-      }
-    } catch {
-      // Mantém fallback seguro de mocks
-    }
-  }, []);
+      return {
+        id: item.targetId,
+        targetTypeEnum,
+        alvoTipo,
+        alvoNome: item.target?.title ?? "Conteúdo denunciado",
+        autor: {
+          id: item.target?.author?.id,
+          nome: authorName,
+          iniciais: getInitials(authorName),
+          titulo: "Explorador",
+          membroDesde: new Date(
+            item.target?.createdAt ?? item.firstReportedAt,
+          ).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
+          avaliacoesEscritas: 0,
+          conteudoRemovido: 0,
+        },
+        diasAberto,
+        trecho: item.target?.content ?? item.target?.title ?? "",
+        conteudo: {
+          corpo: item.target?.content ?? "",
+          local: item.target?.subtitle ?? item.target?.title ?? "Sorocaba",
+          bairro: item.target?.subtitle ?? "Sorocaba",
+          data: new Date(
+            item.target?.createdAt ?? item.firstReportedAt,
+          ).toLocaleDateString("pt-BR"),
+        },
+        denunciantes,
+      };
+    });
+  }, [reportsResponse]);
+
+  const initialFeedback = useMemo<FeedbackMock[]>(() => {
+    const rawItems =
+      feedbackResponse.status === 200 ? feedbackResponse.data.items : [];
+
+    const kindMap: Record<number, FeedbackKind> = {
+      0: "bug",
+      1: "sugestao",
+      2: "elogio",
+    };
+
+    return rawItems.map((item) => {
+      const authorName = item.author?.name?.trim();
+      return {
+        id: item.id,
+        tipo: kindMap[Number(item.category)] ?? "sugestao",
+        mensagem: item.message,
+        status: "novo" as FeedbackStatus,
+        diasRecebido: daysSince(item.createdAt),
+        autor: authorName
+          ? {
+              nome: authorName,
+              iniciais: getInitials(authorName),
+              titulo: "Explorador",
+            }
+          : undefined,
+        rota: item.originPath ?? undefined,
+      };
+    });
+  }, [feedbackResponse]);
+
+  const [reports, setReports] = useState<ReportCaseMock[]>(initialReports);
+  const [feedback, setFeedback] = useState<FeedbackMock[]>(initialFeedback);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    setReports(initialReports);
+  }, [initialReports]);
+
+  useEffect(() => {
+    setFeedback(initialFeedback);
+  }, [initialFeedback]);
+
+  const [filters, setFilters] = useState<QueueFilters>(EMPTY_FILTERS);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialReports[0]?.id ?? null,
+  );
 
   /** Mais denunciados primeiro: o caso de 6 reports pesa mais que o de 1. */
   const visible = useMemo(
@@ -232,22 +316,26 @@ export function useReports() {
       reports
         .filter((report) => matchesFilters(report, filters))
         .sort(
-          (a, b) =>
-            b.denunciantes.length - a.denunciantes.length ||
-            b.diasAberto - a.diasAberto,
+          (first, second) =>
+            second.denunciantes.length - first.denunciantes.length ||
+            second.diasAberto - first.diasAberto,
         ),
     [reports, filters],
   );
 
-  const selected = visible.find((report) => report.id === selectedId) ?? null;
+  const selected =
+    visible.find((report) => report.id === selectedId) ?? visible[0] ?? null;
 
   const stats = useMemo(
     () => ({
       casos: reports.length,
       coordenadas: reports.filter((report) =>
-        getReportSignals(report).some((s) => s.kind === "coordenada"),
+        getReportSignals(report).some((signal) => signal.kind === "coordenada"),
       ).length,
-      denuncias: reports.reduce((sum, r) => sum + r.denunciantes.length, 0),
+      denuncias: reports.reduce(
+        (sum, report) => sum + report.denunciantes.length,
+        0,
+      ),
       naoLidos: feedback.filter((item) => item.status === "novo").length,
       bugs: feedback.filter((item) => item.tipo === "bug").length,
       sugestoes: feedback.filter((item) => item.tipo === "sugestao").length,
@@ -259,10 +347,9 @@ export function useReports() {
   const updateFilters = useCallback(
     (patch: Partial<QueueFilters>) => {
       const next = { ...filters, ...patch };
-
-      // A seleção acompanha o filtro: manter o caso anterior deixaria o painel
-      // mostrando algo que acabou de sumir da fila.
-      const stillVisible = reports.filter((r) => matchesFilters(r, next));
+      const stillVisible = reports.filter((report) =>
+        matchesFilters(report, next),
+      );
 
       setFilters(next);
       setSelectedId(stillVisible[0]?.id ?? null);
@@ -276,21 +363,27 @@ export function useReports() {
   }, [reports]);
 
   /**
-   * Encerra o caso e avança para o próximo. Descartar e remover saem os dois
-   * por aqui — a diferença está no que acontece com o conteúdo, não com o caso.
+   * Descarta as denúncias mantendo o conteúdo publicado.
    */
-  const closeCase = useCallback((): ReportCaseMock | null => {
+  const discardCase = useCallback(async (): Promise<ReportCaseMock | null> => {
     if (!selected) return null;
 
     const index = visible.findIndex((report) => report.id === selected.id);
     const remaining = visible.filter((report) => report.id !== selected.id);
     const next = remaining[Math.min(index, remaining.length - 1)];
 
-    if (selected.id.startsWith("api-report-")) {
-      const targetType = selected.alvoTipo === "ponto" ? "place" : selected.alvoTipo === "avaliacao" ? "review" : "comment";
-      const targetId = selected.id.replace("api-report-", "");
-      dismissReportsAction(targetType, targetId, "Caso encerrado pelo moderador");
-    }
+    const targetType =
+      selected.alvoTipo === "ponto"
+        ? "Place"
+        : selected.alvoTipo === "avaliacao"
+          ? "Review"
+          : "Comment";
+
+    await dismissReportsAction(
+      targetType,
+      selected.id,
+      "Caso descartado pelo moderador",
+    );
 
     setReports((current) =>
       current.filter((report) => report.id !== selected.id),
@@ -299,6 +392,41 @@ export function useReports() {
 
     return selected;
   }, [visible, selected]);
+
+  /**
+   * Remove o conteúdo denunciado e encerra o caso.
+   */
+  const removeReportedContent = useCallback(
+    async (reason: string): Promise<ReportCaseMock | null> => {
+      if (!selected) return null;
+
+      const index = visible.findIndex((report) => report.id === selected.id);
+      const remaining = visible.filter((report) => report.id !== selected.id);
+      const next = remaining[Math.min(index, remaining.length - 1)];
+
+      const targetType =
+        selected.alvoTipo === "ponto"
+          ? "Place"
+          : selected.alvoTipo === "avaliacao"
+            ? "Review"
+            : "Comment";
+
+      await removeContentAction(targetType, selected.id, reason);
+      await dismissReportsAction(
+        targetType,
+        selected.id,
+        `Conteúdo removido: ${reason}`,
+      );
+
+      setReports((current) =>
+        current.filter((report) => report.id !== selected.id),
+      );
+      setSelectedId(next?.id ?? null);
+
+      return selected;
+    },
+    [visible, selected],
+  );
 
   const setFeedbackStatus = useCallback(
     (id: string, status: FeedbackStatus) => {
@@ -312,16 +440,18 @@ export function useReports() {
   return {
     visible,
     selected,
-    selectedId,
+    selectedId: selected?.id ?? null,
     setSelectedId,
     filters,
     updateFilters,
     clearFilters,
     stats,
-    closeCase,
+    discardCase,
+    removeReportedContent,
     feedback,
     setFeedbackStatus,
   };
 }
 
 export type { FeedbackMock, ReportCaseMock };
+

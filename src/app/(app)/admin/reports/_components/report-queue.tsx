@@ -28,9 +28,8 @@ import {
   REASON_LABEL,
   type ReportCaseMock,
   type ReportTargetKind,
-  reportsSummaryMock,
   TARGET_LABEL,
-} from "@/mocks/admin-reports";
+} from "@/types/reports";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { ReportSignalBadges } from "./report-signal-badges";
@@ -175,12 +174,6 @@ export function ReportQueue({
             <p className="mt-3.5 font-semibold">Nenhum caso aberto</p>
             <p className="text-muted-foreground mt-1 text-sm">
               A comunidade não sinalizou nada pendente.
-            </p>
-            <p className="text-muted-foreground mt-4 text-sm">
-              Tempo médio de resolução nesta semana:{" "}
-              <span className="text-foreground font-semibold">
-                {reportsSummaryMock.tempoMedioResolucao}
-              </span>
             </p>
           </div>
         ) : (

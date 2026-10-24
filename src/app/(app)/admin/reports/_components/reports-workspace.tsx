@@ -13,8 +13,10 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import type { listAdminFeedbackResponse } from "@/http/feedback/feedback";
+import type { listAdminGroupedReportsResponse } from "@/http/reports/reports";
 import { cn } from "@/lib/utils";
-import { reportsSummaryMock, TARGET_LABEL } from "@/mocks/admin-reports";
+import { TARGET_LABEL } from "@/types/reports";
 
 import { FeedbackTable } from "./feedback-table";
 import { ReportDetail } from "./report-detail";
@@ -28,17 +30,18 @@ const TABS: { value: WorkspaceTab; label: string }[] = [
   { value: "feedback", label: "Feedback" },
 ];
 
+interface ReportsWorkspaceProps {
+  reportsPromise: Promise<listAdminGroupedReportsResponse>;
+  feedbackPromise: Promise<listAdminFeedbackResponse>;
+}
+
 /**
- * A caixa de entrada inteira. As duas abas dividem a rota porque compartilham
- * a forma de trabalho — fila que chega sozinha e precisa ser despachada — mas
- * **não compartilham modelo**: denúncia tem alvo polimórfico e se resolve
- * decidindo sobre conteúdo de terceiro; feedback não tem alvo e se resolve com
- * triagem de status. Por isso cada aba tem forma de tela própria.
- *
- * É client porque nem `Denuncia` nem `Feedback` existem no banco — encerrar um
- * caso mexe só no array de `src/mocks/admin-reports.ts`.
+ * Workspace administrativo de denúncias agrupadas e feedback, desempacotando Promises via `useReports`.
  */
-export function ReportsWorkspace() {
+export function ReportsWorkspace({
+  reportsPromise,
+  feedbackPromise,
+}: ReportsWorkspaceProps) {
   const {
     visible,
     selected,
@@ -48,10 +51,14 @@ export function ReportsWorkspace() {
     updateFilters,
     clearFilters,
     stats,
-    closeCase,
+    discardCase,
+    removeReportedContent,
     feedback,
     setFeedbackStatus,
-  } = useReports();
+  } = useReports({
+    reportsPromise,
+    feedbackPromise,
+  });
 
   const [tab, setTab] = useState<WorkspaceTab>("denuncias");
   const [removing, setRemoving] = useState(false);
@@ -59,8 +66,8 @@ export function ReportsWorkspace() {
   const hasFilters = Object.values(filters).some(Boolean);
   const isReports = tab === "denuncias";
 
-  function discard() {
-    const report = closeCase();
+  async function discard() {
+    const report = await discardCase();
     if (!report) return;
 
     toast.success("Denúncias descartadas", {
@@ -68,8 +75,8 @@ export function ReportsWorkspace() {
     });
   }
 
-  function remove(reason: string) {
-    const report = closeCase();
+  async function remove(reason: string) {
+    const report = await removeReportedContent(reason);
     setRemoving(false);
     if (!report) return;
 
@@ -77,6 +84,7 @@ export function ReportsWorkspace() {
       description: "O caso foi encerrado e o autor avisado.",
     });
   }
+
 
   const removalSubject = selected
     ? `${TARGET_LABEL[selected.alvoTipo].label.toLowerCase()}${
@@ -133,9 +141,6 @@ export function ReportsWorkspace() {
                 )}
 
                 <Badge>{stats.denuncias} denúncias no total</Badge>
-                <Badge>
-                  {reportsSummaryMock.resolvidosNaSemana} resolvidos esta semana
-                </Badge>
               </>
             ) : (
               <>
@@ -180,8 +185,7 @@ export function ReportsWorkspace() {
                 <div className="flex flex-1 flex-col items-center justify-center gap-1.5 p-12 text-center">
                   <p className="font-semibold">Nada para revisar</p>
                   <p className="text-muted-foreground text-sm">
-                    Todos os casos foram encerrados. Tempo médio nesta semana:{" "}
-                    {reportsSummaryMock.tempoMedioResolucao}.
+                    Todos os casos abertos foram revisados.
                   </p>
                 </div>
               )}

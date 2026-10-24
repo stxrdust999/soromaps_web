@@ -2,7 +2,7 @@ import { ImageIcon, MapPinIcon } from "lucide-react";
 import { StarRating } from "@/components/blocks/star-rating";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { ReportCaseMock, ReportedAuthorMock } from "@/mocks/admin-reports";
+import type { ReportCaseMock, ReportedAuthorMock } from "@/types/reports";
 
 interface ReportedContentProps {
   report: ReportCaseMock;
