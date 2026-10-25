@@ -10,15 +10,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { attentionQueuesMock } from "@/mocks/admin-dashboard";
+import type { AttentionQueueItem } from "@/types/dashboard";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
+
+interface AttentionQueuesProps {
+  queues: AttentionQueueItem[];
+}
 
 /**
  * As filas de trabalho do admin. Cada linha é um atalho: o contador diz
  * quanto tem, a idade do mais antigo diz o quanto atrasou, e a linha inteira
  * leva para a tela onde a fila se despacha.
  */
-export function AttentionQueues() {
+export function AttentionQueues({ queues }: AttentionQueuesProps) {
   return (
     <Table>
       <TableHeader>
@@ -31,7 +35,7 @@ export function AttentionQueues() {
       </TableHeader>
 
       <TableBody>
-        {attentionQueuesMock.map((queue) => (
+        {queues.map((queue) => (
           <TableRow key={queue.label} className="group">
             <TableCell className="font-medium">{queue.label}</TableCell>
 
@@ -59,3 +63,4 @@ export function AttentionQueues() {
     </Table>
   );
 }
+

@@ -17,7 +17,7 @@ import { TableFooter } from "@/components/table/table-footer";
 import { TableHeaderTemplate } from "@/components/table/table-header-template";
 import { Table, TableBody, TableHeader } from "@/components/ui/table";
 import { useTableConfig } from "@/hooks/table/use-table-config";
-import type { FeedbackMock } from "@/mocks/admin-reports";
+import type { FeedbackMock } from "@/types/reports";
 import { hasActiveFilters } from "@/utils/table/has-active-filters";
 
 import {

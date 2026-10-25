@@ -11,28 +11,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MODAL_CLOSE_DELAY_MS } from "@/constants/users";
-import type { getUserResponse } from "@/http/users/users";
+import type { adminGetUserResponse } from "@/http/users/users";
 
 import { UserForm } from "./user-form";
 import { UserFormSkeleton } from "./user-form-skeleton";
 
 interface UserFormModalProps {
   promises: {
-    userPromise: Promise<getUserResponse>;
+    userPromise: Promise<adminGetUserResponse>;
   };
 
   isUpdating?: boolean;
-  userId?: number;
+  userId?: string;
 }
 
-/**
- * Frame of the create/update user modal. Opens the `Dialog` immediately,
- * before any data resolves, leaving only the content in `Suspense`; passes
- * promises through untouched to the form. `router.back()` discards the
- * intercepted route — the modal is a route, not local state.
- *
- * @param props Data promise, create/update mode and the user id.
- */
 export function UserFormModal({
   promises,
   isUpdating = false,

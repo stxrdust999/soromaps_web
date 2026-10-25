@@ -19,13 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CategoryMock } from "@/mocks/admin-categories";
+import type { CategoryViewModel } from "./use-categories";
 
 interface DeleteCategoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  category: CategoryMock;
-  categories: CategoryMock[];
+  category: CategoryViewModel;
+  categories: CategoryViewModel[];
   onConfirm: (targetId?: string) => void;
   onDeactivate: () => void;
 }

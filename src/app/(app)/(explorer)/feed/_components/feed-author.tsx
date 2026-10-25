@@ -4,14 +4,16 @@ import type { ReactNode } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { explorerCredential } from "@/constants/explorer-titles";
 import { cn } from "@/lib/utils";
-import type { FeedAuthorMock } from "@/mocks/feed";
+import type { FeedAuthorMock } from "@/types/feed";
 
 interface FeedAuthorAvatarProps {
   author: FeedAuthorMock;
   className?: string;
 }
 
-/** Avatar do autor, com a inicial como reserva quando não há foto. */
+/**
+ * Avatar do autor no feed, com iniciais como fallback.
+ */
 export function FeedAuthorAvatar({ author, className }: FeedAuthorAvatarProps) {
   return (
     <Avatar className={cn("size-10 shrink-0", className)}>
@@ -25,15 +27,11 @@ export function FeedAuthorAvatar({ author, className }: FeedAuthorAvatarProps) {
 
 interface FeedAuthorNameProps {
   author: FeedAuthorMock;
-  /** O que o autor fez, ex.: "avaliou". Fecha a frase do cabeçalho. */
   action?: ReactNode;
 }
 
 /**
- * Nome do autor com o selo de verificado e o título de explorador.
- *
- * O título vem da contagem de conquistas (`explorerCredential`) — não existe
- * nível nem pontuação, decisão de 2026-08-12.
+ * Nome do autor com selo de verificado e credencial de explorador.
  */
 export function FeedAuthorName({ author, action }: FeedAuthorNameProps) {
   return (

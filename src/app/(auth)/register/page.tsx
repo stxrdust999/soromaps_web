@@ -10,52 +10,57 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { responseToast } from "@/lib/toaster";
 
-/**
- * Página de login
- */
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const [username, setUsername] = React.useState("");
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-
-  const userData = {
-    userName: username,
-    email: email,
-    password: password,
-  };
+  const [confirmPassword, setConfirmPassword] = React.useState("");
 
   const handleRegister = async () => {
-    if (!username.trim() || !password.trim()) {
+    if (!name.trim() || !email.trim() || !password.trim()) {
       responseToast.error({
         title: "Campos obrigatórios",
-        description: "Por favor, preencha o nome de usuário e a senha.",
+        description: "Por favor, preencha todos os campos do formulário.",
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      responseToast.error({
+        title: "Senhas divergentes",
+        description: "A confirmação de senha não confere.",
       });
       return;
     }
 
     startTransition(async () => {
       try {
-        const result = await registerAction(userData);
+        const result = await registerAction({
+          name,
+          email,
+          password,
+          confirmPassword,
+        });
 
-        if (result?.error) {
+        if (!result.success) {
           responseToast.error({
             title: "Erro ao criar usuário",
-            description: result.error,
+            description: result.message ?? "Erro ao registrar.",
           });
           return;
         }
 
         responseToast.success({
           title: "Usuário criado com sucesso!",
-          description: `O usuário ${username} foi adicionado ao sistema.`,
+          description: `Bem-vindo, ${name}! Redirecionando...`,
         });
 
-        router.push("/login");
+        router.push("/home");
         router.refresh();
-      } catch (_error) {
+      } catch {
         responseToast.error({
           title: "Erro ao criar usuário",
           description: "Ocorreu um problema ao tentar salvar os dados.",
@@ -92,14 +97,14 @@ export default function RegisterPage() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Nome de usuário
+                Nome
               </span>
               <Input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 disabled={isPending}
                 className="shadow-none text-md h-11 border-zinc-200 focus-visible:border-zinc-400"
-                placeholder="Digite seu nome de usuário..."
+                placeholder="Digite seu nome completo..."
               />
             </div>
 
@@ -108,6 +113,7 @@ export default function RegisterPage() {
                 E-mail
               </span>
               <Input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isPending}
@@ -125,7 +131,20 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
                 className="shadow-none text-md h-11 border-zinc-200 focus-visible:border-zinc-400"
-                placeholder="Digite sua senha..."
+                placeholder="Digite sua senha (mínimo 8 caracteres)..."
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Confirmar Senha
+              </span>
+              <PasswordInput
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isPending}
+                className="shadow-none text-md h-11 border-zinc-200 focus-visible:border-zinc-400"
+                placeholder="Confirme sua senha..."
               />
             </div>
           </div>

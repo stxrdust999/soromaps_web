@@ -3,19 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import type { StoryMock } from "@/mocks/stories";
+import type { StoryView } from "@/types/stories";
 
 interface StoryShowcaseProps {
-  stories: StoryMock[];
+  stories: StoryView[];
 }
 
 /**
  * Vitrine das pautas: uma em destaque e as seguintes em coluna.
- *
- * A pauta existe porque atividade de usuário tem dia fraco — em base nova, há
- * semana em que ninguém avalia nada. Texto editorial ancorado em lugares do
- * mapa é o conteúdo que o produto controla, e é o que dá à Comunidade um
- * motivo de visita que não depende de terceiros.
  */
 export function StoryShowcase({ stories }: StoryShowcaseProps) {
   const [featured, ...rest] = stories;
@@ -24,6 +19,7 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
 
   return (
     <section className="flex flex-col gap-3">
+      {/* header - title */}
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold text-lg">Pautas da cidade</h2>
         <span className="text-muted-foreground text-xs">
@@ -31,6 +27,7 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
         </span>
       </div>
 
+      {/* showcase - grid */}
       <div className="grid gap-4 lg:grid-cols-2 lg:grid-rows-2">
         <Link
           href={`/pautas/${featured.slug}`}
@@ -64,8 +61,8 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
 
             <span className="flex items-center gap-1.5 text-white/70 text-xs">
               <ClockIcon className="size-3.5" />
-              {featured.tempoLeitura} min de leitura · {featured.locais.length}{" "}
-              lugares
+              {featured.tempoLeitura} min de leitura ·{" "}
+              {featured.locaisCount ?? featured.locais.length} lugares
             </span>
           </div>
         </Link>
@@ -109,22 +106,11 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
   );
 }
 
-/**
- * Rótulo de quem escreveu.
- *
- * Pauta redigida por modelo aparece marcada para o leitor, sempre — quem lê
- * uma recomendação sobre um comércio real tem direito de saber que ela saiu de
- * um gerador ancorado nos dados do mapa, e não de alguém que esteve lá.
- *
- * `onPhoto` troca o outline padrão (ilegível sobre a foto do card em
- * destaque, `text-foreground` escuro sobre imagem escura) por um chip
- * translúcido — mesma família visual do badge laranja ao lado.
- */
 function StoryOriginBadge({
   story,
   onPhoto = false,
 }: {
-  story: StoryMock;
+  story: StoryView;
   onPhoto?: boolean;
 }) {
   const toneClassName = onPhoto
@@ -143,7 +129,7 @@ function StoryOriginBadge({
     <Badge
       variant="outline"
       className={toneClassName}
-      title={`Rascunho de ${story.modelo}, revisado por ${story.revisadoPor ?? "a equipe"}`}
+      title={`Rascunho de ${story.modelo ?? "IA"}, revisado por ${story.revisadoPor ?? "a equipe"}`}
     >
       <SparklesIcon className="size-3" />
       IA revisada

@@ -8,7 +8,7 @@ import { TableFooter } from "@/components/table/table-footer";
 import { TableHeaderTemplate } from "@/components/table/table-header-template";
 import { Table, TableBody, TableHeader } from "@/components/ui/table";
 import { useTableConfig } from "@/hooks/table/use-table-config";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 
 import {
   type AchievementRowActions,

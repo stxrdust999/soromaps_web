@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { FeedCurationItem } from "@/mocks/feed";
+import type { FeedCurationItem } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { FeedCardFrame, type FeedCardHandlers } from "./feed-card-frame";
@@ -20,12 +20,7 @@ interface FeedCurationCardProps {
 }
 
 /**
- * Roteiro montado pela equipe.
- *
- * É a fonte que não depende de ninguém ter feito nada: em cidade pequena e
- * base nova, há dias em que a atividade real não enche uma tela. A pauta
- * garante que o feed nunca abra vazio — e é o lugar onde o produto tem voz
- * própria, em vez de só espelhar o banco.
+ * Roteiro/pauta editorial exibido no feed.
  */
 export function FeedCurationCard({
   item,

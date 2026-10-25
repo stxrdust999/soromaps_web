@@ -1,6 +1,6 @@
 "use client";
 
-import { FEED_KIND_LABEL, type FeedItemMock } from "@/mocks/feed";
+import { FEED_KIND_LABEL, type FeedItemMock } from "@/types/feed";
 
 import { FeedAchievementCard } from "./feed-achievement-card";
 import { FeedBurstCard } from "./feed-burst-card";
@@ -11,18 +11,8 @@ import { FeedNewPlaceCard } from "./feed-new-place-card";
 import { FeedReviewCard } from "./feed-review-card";
 import { type FeedMute, feedItemPlace } from "./use-feed";
 
-/**
- * O que este card oferece silenciar.
- *
- * Bairro e categoria só entram quando o item tem **um** lugar: num roteiro de
- * três, "menos deste bairro" silenciaria os outros dois de quebra.
- *
- * @param item Item exibido.
- * @returns Regras na ordem em que aparecem no menu, da mais estreita à mais larga.
- */
 function buildMutes(item: FeedItemMock): FeedMute[] {
   const local = feedItemPlace(item);
-
   const rules: FeedMute[] = [];
 
   if (local) {
@@ -53,11 +43,7 @@ interface FeedItemProps {
 }
 
 /**
- * Escolhe o card pelo tipo do item.
- *
- * A união é discriminada por `kind`, então tipo novo no modelo quebra este
- * `switch` em tempo de compilação — que é onde se quer descobrir que faltou
- * desenhar o card.
+ * Escolhe o card pelo tipo do item no feed.
  */
 export function FeedItem({ item, handlers }: FeedItemProps) {
   const mutes = buildMutes(item);

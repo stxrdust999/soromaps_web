@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { dataQualitySeriesMock } from "@/mocks/admin-dashboard";
+import type { DataQualityPointItem } from "@/types/dashboard";
 
 const chartConfig = {
   completos: { label: "Completos", color: "var(--chart-2)" },
@@ -45,16 +45,20 @@ const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "UTC",
 });
 
+interface DataQualityChartProps {
+  series: DataQualityPointItem[];
+}
+
 /**
  * Quantos pontos têm foto, categoria e descrição preenchidos — a métrica que
  * diz se o catálogo está crescendo com qualidade ou só crescendo.
  */
-export function DataQualityChart() {
+export function DataQualityChart({ series }: DataQualityChartProps) {
   const [range, setRange] = useState("90");
 
   const data = useMemo(
-    () => dataQualitySeriesMock.slice(-Number(range)),
-    [range],
+    () => series.slice(-Number(range)),
+    [series, range],
   );
 
   return (

@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { AchievementBadge } from "@/components/ui/achievement-badge";
 import { Button } from "@/components/ui/button";
-import { type FeedAchievementItem, feedItemDate } from "@/mocks/feed";
+import { type FeedAchievementItem, feedItemDate } from "@/types/feed";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { FeedPlaceLink } from "./feed-actions";
@@ -19,11 +19,7 @@ interface FeedAchievementCardProps {
 }
 
 /**
- * Conquista de outro explorador.
- *
- * Mostra o **critério** junto do badge de propósito: sem ele o card é vaidade
- * alheia; com ele é uma sugestão do que dá para fazer na cidade — que é o
- * único motivo de conquista de estranho valer espaço num feed sem grafo.
+ * Card de conquista rara desbloqueada por outro explorador no feed.
  */
 export function FeedAchievementCard({
   item,
@@ -57,7 +53,7 @@ export function FeedAchievementCard({
       footer={
         <>
           <Button asChild size="sm" variant="ghost">
-            <Link href="/achievements">Ver minhas conquistas</Link>
+            <Link href="/profile/achievements">Ver minhas conquistas</Link>
           </Button>
 
           {local && <FeedPlaceLink placeId={local.id} />}

@@ -1,34 +1,20 @@
-import { NavigationIcon, StarIcon } from "lucide-react";
+import { MapPinIcon, NavigationIcon, StarIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { placeTagColor } from "@/constants/places";
 import { cn } from "@/lib/utils";
-import { getMarkerDetailsMock } from "@/mocks/markers";
 import type { MarkerResource } from "@/types/marker";
 
-/**
- * Três formas, três trabalhos — e nenhuma outra.
- *
- * `sm` é o cartão de trilha, onde cabe pouco; `md` é o padrão, com bairro e
- * avaliações; `featured` ocupa a coluna inteira de um grid, com foto larga,
- * para a seção que a página quer que seja lida primeiro. Tamanho aqui é
- * hierarquia — se um card novo não muda o peso da seção, ele é `md`.
- */
 type PlaceCardSize = "sm" | "md" | "featured";
 
 interface PlaceCardProps {
-  /**
-   * Só id e nome: o resto do card vem de `getMarkerDetailsMock`. Aceitar o
-   * recorte deixa telas sobre mock, que não têm coordenada, reusarem o card
-   * sem inventar `lat`/`lng`.
-   */
-  marker: Pick<MarkerResource, "id" | "nome">;
+  marker: Partial<MarkerResource> & Pick<MarkerResource, "id" | "nome">;
   size?: PlaceCardSize;
   showTags?: boolean;
-  /** Selo sobreposto à foto, no canto superior esquerdo — ex.: "Em alta". */
-  badge?: React.ReactNode;
+  badge?: ReactNode;
   className?: string;
 }
 
@@ -51,8 +37,8 @@ const SIZES: Record<PlaceCardSize, string> = {
 };
 
 /**
- * Card de local das trilhas de descoberta. Identifica e leva ao detalhe: o que
- * aprofunda (descrição, galeria, ranking) mora em `/places/[id]`.
+ * Card de local utilizado nas trilhas de descoberta, favoritos e destaques.
+ * Exibe foto de capa, nota média, bairro, categoria e tags reais do local.
  */
 export function PlaceCard({
   marker,
@@ -61,9 +47,21 @@ export function PlaceCard({
   badge,
   className,
 }: PlaceCardProps) {
-  const details = getMarkerDetailsMock(marker.id);
   const isSmall = size === "sm";
   const isFeatured = size === "featured";
+
+  const fotoUrl = marker.coverPhotoUrl ?? null;
+  const nota =
+    marker.ratingAverage !== undefined && marker.ratingAverage > 0
+      ? marker.ratingAverage.toFixed(1)
+      : "—";
+  const categoria = marker.category?.name ?? "Local";
+  const bairro = marker.neighborhood ?? "Sorocaba";
+  const sobre = marker.about ?? "";
+  const totalAvaliacoes = marker.reviewsCount ?? 0;
+  const tags = marker.tags?.map((tag) => tag.name) ?? [];
+  const distanceLabel =
+    marker.distanceKm !== undefined ? `${marker.distanceKm}km` : bairro;
 
   return (
     <Link
@@ -74,29 +72,38 @@ export function PlaceCard({
         className,
       )}
     >
+      {/* cover photo - section */}
       <div
-        className={cn("relative w-full overflow-hidden bg-muted", PHOTO[size])}
+        className={cn(
+          "relative flex w-full items-center justify-center overflow-hidden bg-muted",
+          PHOTO[size],
+        )}
       >
-        <Image
-          src={details.fotoUrl}
-          alt={`Foto de ${marker.nome}`}
-          fill
-          sizes={SIZES[size]}
-          className={cn(
-            "object-cover",
-            isFeatured &&
-              "transition-transform duration-500 group-hover:scale-105",
-          )}
-        />
+        {fotoUrl ? (
+          <Image
+            src={fotoUrl}
+            alt={`Foto de ${marker.nome}`}
+            fill
+            sizes={SIZES[size]}
+            className={cn(
+              "object-cover",
+              isFeatured &&
+                "transition-transform duration-500 group-hover:scale-105",
+            )}
+          />
+        ) : (
+          <MapPinIcon className="size-8 text-muted-foreground/40" aria-hidden />
+        )}
 
         {badge && <div className="absolute top-2 left-2">{badge}</div>}
 
         <Badge className="absolute right-2 bottom-2 bg-black/75 text-white">
           <StarIcon className="size-3 fill-yellow-500 text-yellow-500" />
-          {details.nota}
+          {nota}
         </Badge>
       </div>
 
+      {/* metadata - section */}
       <div className="flex flex-col gap-1 p-3">
         <span
           className={cn(
@@ -109,19 +116,19 @@ export function PlaceCard({
 
         <span className="truncate text-muted-foreground text-xs">
           {isSmall
-            ? `${details.categoria} · ${details.distancia}km`
-            : `${details.categoria} · ${details.bairro}`}
+            ? `${categoria} · ${distanceLabel}`
+            : `${categoria} · ${bairro}`}
         </span>
 
-        {isFeatured && (
+        {isFeatured && sobre && (
           <p className="mt-1 line-clamp-2 text-pretty text-muted-foreground text-xs leading-relaxed">
-            {details.sobre}
+            {sobre}
           </p>
         )}
 
-        {showTags && details.tags.length > 0 && (
+        {showTags && tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {details.tags.slice(0, 3).map((tag) => (
+            {tags.slice(0, 3).map((tag) => (
               <Badge
                 key={tag}
                 className={cn(
@@ -137,10 +144,14 @@ export function PlaceCard({
 
         {!isSmall && (
           <div className="mt-1 flex items-center gap-1.5 text-muted-foreground text-xs">
-            <NavigationIcon className="size-3 shrink-0 text-blue-500" />
-            {details.distancia}km
-            <span className="size-1 shrink-0 rounded-full bg-muted-foreground/30" />
-            {details.totalAvaliacoes} avaliações
+            {marker.distanceKm !== undefined && (
+              <>
+                <NavigationIcon className="size-3 shrink-0 text-blue-500" />
+                {marker.distanceKm}km
+                <span className="size-1 shrink-0 rounded-full bg-muted-foreground/30" />
+              </>
+            )}
+            {totalAvaliacoes} avaliações
           </div>
         )}
       </div>

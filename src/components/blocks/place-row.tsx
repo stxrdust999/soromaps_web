@@ -1,27 +1,20 @@
+import { MapPinIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-import { getMarkerDetailsMock } from "@/mocks/markers";
 import type { MarkerResource } from "@/types/marker";
 
 interface PlaceRowProps {
-  /** Só id e nome, como em `PlaceCard`; o resto vem do mock de detalhes. */
-  marker: Pick<MarkerResource, "id" | "nome">;
-  /** Número à direita — distância, nota, contagem. Cabe uma informação só. */
+  marker: Partial<MarkerResource> & Pick<MarkerResource, "id" | "nome">;
   trailing?: ReactNode;
-  /** Posição, quando a linha faz parte de um ranking. */
   position?: number;
   className?: string;
 }
 
 /**
- * Linha compacta de local: miniatura, nome e uma informação à direita.
- *
- * É a forma para lista **densa** — onde o usuário compara vários de relance e
- * a foto é só reconhecimento visual, não convite. Card com foto grande na
- * mesma tela disputaria atenção com a seção que deve ser lida primeiro.
+ * Linha compacta de local com miniatura, categoria, bairro e informação lateral à direita.
  */
 export function PlaceRow({
   marker,
@@ -29,7 +22,9 @@ export function PlaceRow({
   position,
   className,
 }: PlaceRowProps) {
-  const details = getMarkerDetailsMock(marker.id);
+  const fotoUrl = marker.coverPhotoUrl ?? null;
+  const categoria = marker.category?.name ?? "Local";
+  const bairro = marker.neighborhood ?? "Sorocaba";
 
   return (
     <Link
@@ -45,20 +40,39 @@ export function PlaceRow({
         </span>
       )}
 
-      <div className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-muted">
-        <Image
-          src={details.fotoUrl}
-          alt={`Foto de ${marker.nome}`}
-          fill
-          sizes="44px"
-          className="object-cover"
-        />
+      {/* thumbnail - section */}
+      <div
+        className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+        style={{
+          backgroundColor: fotoUrl ? undefined : marker.category?.color ? `${marker.category.color}20` : undefined,
+        }}
+      >
+        {fotoUrl ? (
+          <Image
+            src={fotoUrl}
+            alt={`Foto de ${marker.nome}`}
+            fill
+            sizes="44px"
+            className="object-cover"
+          />
+        ) : (
+          <div
+            className="flex size-full items-center justify-center rounded-lg border border-border/40"
+            style={{
+              backgroundColor: marker.category?.color ? `${marker.category.color}25` : undefined,
+              color: marker.category?.color ?? "currentColor",
+            }}
+          >
+            <MapPinIcon className="size-5" aria-hidden />
+          </div>
+        )}
       </div>
 
+      {/* details - section */}
       <div className="flex min-w-0 flex-col">
         <span className="truncate font-semibold text-sm">{marker.nome}</span>
         <span className="truncate text-muted-foreground text-xs">
-          {details.categoria} · {details.bairro}
+          {categoria} · {bairro}
         </span>
       </div>
 

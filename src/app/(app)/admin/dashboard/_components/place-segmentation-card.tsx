@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 import {
@@ -17,19 +18,32 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { placeSegmentsMock } from "@/mocks/admin-dashboard";
+import type { PlaceSegmentItem } from "@/types/dashboard";
 
 import { InfoHint } from "./info-hint";
 
-const chartConfig = Object.fromEntries(
-  placeSegmentsMock.map((segment, index) => [
-    segment.key,
-    { label: segment.categoria, color: `var(--chart-${index + 1})` },
-  ]),
-) satisfies ChartConfig;
+interface PlaceSegmentationCardProps {
+  segments: PlaceSegmentItem[];
+}
 
 /** Rosca de pontos por categoria, com a legenda como lista de valores ao lado. */
-export function PlaceSegmentationCard() {
+export function PlaceSegmentationCard({
+  segments,
+}: PlaceSegmentationCardProps) {
+  const chartConfig = useMemo<ChartConfig>(
+    () =>
+      Object.fromEntries(
+        segments.map((segment, index) => [
+          segment.key,
+          {
+            label: segment.categoria,
+            color: segment.color ?? `var(--chart-${(index % 5) + 1})`,
+          },
+        ]),
+      ),
+    [segments],
+  );
+
   return (
     <Card className="justify-between gap-4">
       <CardHeader>
@@ -37,8 +51,8 @@ export function PlaceSegmentationCard() {
 
         <CardAction>
           <InfoHint>
-            Categoria ainda é constante no front, não entidade — o corte muda
-            quando a tabela `Categoria` existir.
+            Distribuição de locais aprovados agrupados pelas categorias ativas
+            do catálogo.
           </InfoHint>
         </CardAction>
       </CardHeader>
@@ -54,7 +68,7 @@ export function PlaceSegmentationCard() {
             />
 
             <Pie
-              data={placeSegmentsMock}
+              data={segments}
               dataKey="total"
               nameKey="key"
               innerRadius="62%"
@@ -62,15 +76,18 @@ export function PlaceSegmentationCard() {
               paddingAngle={2}
               strokeWidth={0}
             >
-              {placeSegmentsMock.map((segment) => (
-                <Cell key={segment.key} fill={`var(--color-${segment.key})`} />
+              {segments.map((segment, index) => (
+                <Cell
+                  key={segment.key}
+                  fill={segment.color ?? `var(--chart-${(index % 5) + 1})`}
+                />
               ))}
             </Pie>
           </PieChart>
         </ChartContainer>
 
         <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {placeSegmentsMock.map((segment) => (
+          {segments.map((segment, index) => (
             <li
               key={segment.key}
               className="flex items-center gap-2 text-sm leading-none"
@@ -78,7 +95,10 @@ export function PlaceSegmentationCard() {
               <span
                 aria-hidden
                 className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: `var(--color-${segment.key})` }}
+                style={{
+                  backgroundColor:
+                    segment.color ?? `var(--chart-${(index % 5) + 1})`,
+                }}
               />
               <span className="truncate text-muted-foreground">
                 {segment.categoria}
@@ -99,3 +119,4 @@ export function PlaceSegmentationCard() {
     </Card>
   );
 }
+

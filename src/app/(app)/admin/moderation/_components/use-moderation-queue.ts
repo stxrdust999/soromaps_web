@@ -1,14 +1,21 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import {
-  type ModerationItemMock,
-  type ModerationStatus,
-  moderationQueueMock,
-} from "@/mocks/admin-moderation";
+  batchDecideModerationAction,
+  decidePlaceModerationAction,
+  undoModerationDecisionAction,
+} from "@/actions/moderation";
+import type { ModerationPlaceItemDto } from "@/http/api.schemas";
+import { listModerationPlaces } from "@/http/moderation/moderation";
+import type {
+  ModerationAuthorMock,
+  ModerationItemMock,
+  ModerationStatus,
+} from "@/types/moderation";
 
-/** Filtro de categoria em "todas" — sentinela, porque `Select` não aceita `""`. */
 export const ALL_CATEGORIES = "todas";
 
 interface QueueFilters {
@@ -17,18 +24,140 @@ interface QueueFilters {
   soComAlerta: boolean;
 }
 
+function parseNumeric(
+  value: number | string | null | undefined,
+  fallback = 0,
+): number {
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
 /**
- * Item merece atenção antes dos outros: duplicata suspeita, ficha incompleta
- * ou autor sem histórico. Sem alerta = candidato a aprovação rápida.
- *
- * @param item Ponto na fila.
- * @returns `true` quando há pelo menos um sinal de risco.
+ * Converte um `ModerationPlaceItemDto` da API para o contrato visual `ModerationItemMock`.
+ */
+export function mapDtoToItemMock(
+  dto: ModerationPlaceItemDto,
+): ModerationItemMock {
+  const statusStr: ModerationStatus =
+    dto.status === 2
+      ? "aprovado"
+      : dto.status === 3
+        ? "rejeitado"
+        : dto.status === 1
+          ? "devolvido"
+          : "pendente";
+
+  const diffMs = Date.now() - new Date(dto.createdAt).getTime();
+  const diasNaFila = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  const enviados = Math.max(
+    1,
+    parseNumeric(dto.author?.totalSubmittedPlaces, 1),
+  );
+  const aprovados = parseNumeric(dto.author?.approvedPlacesCount, 0);
+  const avaliacoesEscritas = parseNumeric(dto.author?.reviewsWrittenCount, 0);
+  const authorName = dto.author?.name ?? "Explorador";
+  const initials =
+    authorName
+      .split(" ")
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "EX";
+
+  const autor: ModerationAuthorMock = {
+    id: dto.author?.id ?? `author-${dto.id}`,
+    nome: authorName,
+    iniciais: initials,
+    nivel: enviados >= 5 ? "Guia local" : "Explorador",
+    enviados,
+    aprovados,
+    membroDesde: dto.author?.joinedAt
+      ? new Date(dto.author.joinedAt).toLocaleDateString("pt-BR", {
+          month: "short",
+          year: "numeric",
+        })
+      : "recentemente",
+    avaliacoesEscritas,
+  };
+
+  const dup =
+    dto.possibleDuplicates && dto.possibleDuplicates.length > 0
+      ? {
+          id: dto.possibleDuplicates[0].id,
+          nome: dto.possibleDuplicates[0].name,
+          distanciaMetros: parseNumeric(
+            dto.possibleDuplicates[0].distanceMeters,
+            0,
+          ),
+          similaridadeNome: 85,
+          comparacao: [
+            {
+              label: "Nome",
+              emAnalise: dto.name,
+              existente: dto.possibleDuplicates[0].name,
+              igual:
+                dto.name.toLowerCase() ===
+                dto.possibleDuplicates[0].name.toLowerCase(),
+            },
+            {
+              label: "Bairro",
+              emAnalise: dto.neighborhood,
+              existente: dto.possibleDuplicates[0].neighborhood,
+              igual:
+                dto.neighborhood === dto.possibleDuplicates[0].neighborhood,
+            },
+          ],
+        }
+      : undefined;
+
+  return {
+    id: dto.id,
+    nome: dto.name,
+    categoria: dto.category.name,
+    bairro: dto.neighborhood,
+    diasNaFila,
+    fotos: dto.photos.length,
+    photoUrls: dto.photos.map((photo) => photo.url),
+    status: statusStr,
+    autor,
+    autorNovo: enviados <= 1,
+    duplicata: dup,
+    vizinhos: (dto.possibleDuplicates ?? []).map((_, index) => ({
+      x: 0.35 + (index * 0.21) % 0.45,
+      y: 0.3 + (index * 0.17) % 0.45,
+      suspeito: index === 0,
+    })),
+    campos: {
+      nome: dto.name,
+      categoria: dto.category.name,
+      bairro: dto.neighborhood,
+      coordenadas: `${dto.latitude}, ${dto.longitude}`,
+      descricao: dto.description || null,
+      sobre: dto.about || null,
+      melhorHorario: dto.bestTime || null,
+      segredoLocal: dto.localSecret || null,
+      temWifi: dto.hasWifi ? "Sim" : "Não",
+      petFriendly: dto.isPetFriendly ? "Sim" : "Não",
+    },
+  };
+}
+
+/**
+ * Verifica se o item na fila possui alerta (duplicata, incompleto ou autor novo).
  */
 export function hasAlert(item: ModerationItemMock): boolean {
   return Boolean(item.duplicata || isIncomplete(item) || item.autorNovo);
 }
 
-/** Ficha abaixo do mínimo publicável — devolve, não rejeita. */
+/**
+ * Verifica se a ficha do ponto está incompleta.
+ */
 export function isIncomplete(item: ModerationItemMock): boolean {
   return !item.campos.descricao || item.fotos === 0;
 }
@@ -46,23 +175,51 @@ function matchesFilters(
 }
 
 /**
- * Estado da fila de moderação. Tudo em memória: não há API, então decidir
- * apenas troca o `status` do item no array local.
- *
- * O `snapshot` guarda a lista anterior a cada decisão — é o que sustenta o
- * "Desfazer" do toast, e é por isso que ele é substituído (não empilhado) a
- * cada nova decisão: a janela de arrependimento é a última ação, só.
+ * Estado da fila de moderação conectado à API e Server Actions.
  */
-export function useModerationQueue() {
-  const [items, setItems] = useState(moderationQueueMock);
-  const [snapshot, setSnapshot] = useState<ModerationItemMock[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>("zeca");
+export function useModerationQueue(initialItems: ModerationItemMock[] = []) {
+  const [items, setItems] = useState<ModerationItemMock[]>(initialItems);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialItems[0]?.id ?? null,
+  );
   const [markedIds, setMarkedIds] = useState<string[]>([]);
+  const [lastDecidedId, setLastDecidedId] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<QueueFilters>({
     status: "pendente",
     categoria: ALL_CATEGORIES,
     soComAlerta: false,
   });
+
+  useEffect(() => {
+    setItems(initialItems);
+    setSelectedId((current) =>
+      current && initialItems.some((item) => item.id === current)
+        ? current
+        : initialItems[0]?.id ?? null,
+    );
+  }, [initialItems]);
+
+  const reload = useCallback(async () => {
+    try {
+      const response = await listModerationPlaces({
+        Page: 1,
+        PageSize: 50,
+      });
+
+      if (response.status === 200 && response.data.items) {
+        const mapped = response.data.items.map(mapDtoToItemMock);
+        setItems(mapped);
+        setSelectedId((current) =>
+          current && mapped.some((item) => item.id === current)
+            ? current
+            : mapped[0]?.id ?? null,
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao carregar fila de moderação:", error);
+    }
+  }, []);
 
   const visible = useMemo(
     () => items.filter((item) => matchesFilters(item, filters)),
@@ -71,15 +228,16 @@ export function useModerationQueue() {
 
   const selected = visible.find((item) => item.id === selectedId) ?? null;
 
-  const pendingCount = items.filter((i) => i.status === "pendente").length;
-  const returnedCount = items.filter((i) => i.status === "devolvido").length;
+  const pendingCount = items.filter(
+    (item) => item.status === "pendente",
+  ).length;
+  const returnedCount = items.filter(
+    (item) => item.status === "devolvido",
+  ).length;
 
   const updateFilters = useCallback(
     (patch: Partial<QueueFilters>) => {
       const next = { ...filters, ...patch };
-
-      // A seleção acompanha o filtro: manter o item anterior deixaria o painel
-      // mostrando algo que acabou de sumir da lista.
       const stillVisible = items.filter((item) => matchesFilters(item, next));
 
       setFilters(next);
@@ -110,29 +268,44 @@ export function useModerationQueue() {
 
   const clearMarks = useCallback(() => setMarkedIds([]), []);
 
-  /**
-   * Decide o item selecionado e avança para o próximo da fila — sem isso o
-   * admin volta ao mouse a cada item, e os atalhos deixam de valer a pena.
-   */
   const decide = useCallback(
-    (status: ModerationStatus): ModerationItemMock | null => {
+    (
+      status: ModerationStatus,
+      reason?: string | null,
+      feedbackNote?: string | null,
+    ): ModerationItemMock | null => {
       if (!selected) return null;
 
       const index = visible.findIndex((item) => item.id === selected.id);
       const remaining = visible.filter((item) => item.id !== selected.id);
       const next = remaining[Math.min(index, remaining.length - 1)];
 
-      setSnapshot(items);
+      const statusCode =
+        status === "aprovado" ? 2 : status === "rejeitado" ? 3 : 1;
+
       setItems((current) =>
         current.map((item) =>
           item.id === selected.id ? { ...item, status } : item,
         ),
       );
       setSelectedId(next?.id ?? null);
+      setLastDecidedId(selected.id);
+
+      decidePlaceModerationAction(
+        selected.id,
+        statusCode,
+        reason,
+        feedbackNote,
+      ).then((result) => {
+        if (!result.success) {
+          toast.error(result.message);
+          reload();
+        }
+      });
 
       return selected;
     },
-    [items, visible, selected],
+    [visible, selected, reload],
   );
 
   const decideMarked = useCallback(
@@ -140,24 +313,41 @@ export function useModerationQueue() {
       const count = markedIds.length;
       if (!count) return 0;
 
-      setSnapshot(items);
+      const ids = [...markedIds];
+      const statusCode =
+        status === "aprovado" ? 2 : status === "rejeitado" ? 3 : 1;
+
       setItems((current) =>
         current.map((item) =>
-          markedIds.includes(item.id) ? { ...item, status } : item,
+          ids.includes(item.id) ? { ...item, status } : item,
         ),
       );
       setMarkedIds([]);
 
+      batchDecideModerationAction(ids, statusCode).then((result) => {
+        if (!result.success) {
+          toast.error(result.message);
+          reload();
+        }
+      });
+
       return count;
     },
-    [items, markedIds],
+    [markedIds, reload],
   );
 
-  const undo = useCallback(() => {
-    if (!snapshot) return;
-    setItems(snapshot);
-    setSnapshot(null);
-  }, [snapshot]);
+  const undo = useCallback(async () => {
+    if (!lastDecidedId) return;
+
+    const result = await undoModerationDecisionAction(lastDecidedId);
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+
+    toast.success("Decisão desfeita com sucesso.");
+    await reload();
+  }, [lastDecidedId, reload]);
 
   return {
     visible,
@@ -175,5 +365,6 @@ export function useModerationQueue() {
     undo,
     pendingCount,
     returnedCount,
+    reload,
   };
 }

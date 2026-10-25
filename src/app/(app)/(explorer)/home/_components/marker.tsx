@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightIcon, DogIcon, StarIcon, WifiIcon } from "lucide-react";
+import { ArrowRightIcon, StarIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -12,7 +12,6 @@ import {
   MarkerPopup,
   MarkerTooltip,
 } from "@/components/ui/map";
-import { getMarkerDetailsMock } from "@/mocks/markers";
 import type { MarkerResource } from "@/types/marker";
 
 interface LocationMarkerProps {
@@ -28,7 +27,11 @@ interface LocationMarkerProps {
  * e no touch ele nunca aparece. O que precisa de clique fica no popup.
  */
 export default function LocationMarker({ marker }: LocationMarkerProps) {
-  const details = getMarkerDetailsMock(marker.id);
+  const categoryName = marker.category?.name ?? "Local";
+  const coverUrl =
+    marker.coverPhotoUrl ||
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=80";
+  const rating = marker.ratingAverage ? marker.ratingAverage.toFixed(1) : null;
 
   return (
     <MapMarker longitude={marker.lng} latitude={marker.lat}>
@@ -37,14 +40,14 @@ export default function LocationMarker({ marker }: LocationMarkerProps) {
       </MarkerContent>
 
       <MarkerTooltip>
-        {marker.nome} · {details.categoria}
+        {marker.nome} · {categoryName}
       </MarkerTooltip>
 
       <MarkerPopup className="p-0">
         <div className="w-56">
           <div className="relative h-28 w-full overflow-hidden rounded-t-md bg-muted">
             <Image
-              src={details.fotoUrl}
+              src={coverUrl}
               alt={`Foto de ${marker.nome}`}
               fill
               sizes="224px"
@@ -58,27 +61,17 @@ export default function LocationMarker({ marker }: LocationMarkerProps) {
                 {marker.nome}
               </span>
               <span className="text-muted-foreground text-xs">
-                {details.bairro}
+                {categoryName}
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-1">
-              <Badge variant="secondary">{details.categoria}</Badge>
+              <Badge variant="secondary">{categoryName}</Badge>
 
-              <Badge variant="secondary">
-                <StarIcon className="size-3 fill-yellow-500 text-yellow-500" />
-                {details.nota}
-              </Badge>
-
-              {details.temWifi && (
+              {rating && (
                 <Badge variant="secondary">
-                  <WifiIcon className="size-3" />
-                </Badge>
-              )}
-
-              {details.petFriendly && (
-                <Badge variant="secondary">
-                  <DogIcon className="size-3" />
+                  <StarIcon className="size-3 fill-yellow-500 text-yellow-500" />
+                  {rating}
                 </Badge>
               )}
             </div>

@@ -8,15 +8,14 @@ import { TableFooter } from "@/components/table/table-footer";
 import { TableHeaderTemplate } from "@/components/table/table-header-template";
 import { Table, TableBody, TableHeader } from "@/components/ui/table";
 import { useTableConfig } from "@/hooks/table/use-table-config";
-import type { CategoryMock } from "@/mocks/admin-categories";
 
 import { createCategoryColumns } from "./columns";
 import type { CategoryRowActions } from "./row-action";
 import { CategoriesToolbar } from "./toolbar";
-import { findColorCollision } from "./use-categories";
+import { findColorCollision, type CategoryViewModel } from "./use-categories";
 
 interface CategoriesTableProps {
-  categories: CategoryMock[];
+  categories: CategoryViewModel[];
 
   /**
    * ⚠️ Precisa chegar memoizado. `columns` deriva dele, e `useTableConfig`

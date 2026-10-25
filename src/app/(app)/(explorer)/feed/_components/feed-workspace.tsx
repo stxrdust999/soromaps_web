@@ -2,15 +2,33 @@
 
 import { EyeOffIcon, PlusIcon, XIcon } from "lucide-react";
 import Link from "next/link";
-import { useCallback } from "react";
+import { use, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FEED_SORT_LABEL, type FeedSort } from "@/constants/feed";
+import {
+  FEED_SORT_LABEL,
+  type FeedMuteScope,
+  type FeedSort,
+} from "@/constants/feed";
+import type { getMyStatsResponse } from "@/http/activity/activity";
+import type { listExplorersResponse } from "@/http/community/community";
+import type {
+  getFeedResponse,
+  listFeedMutesResponse,
+} from "@/http/feed/feed";
+import type { listPlacesResponse } from "@/http/places/places";
 import { cn } from "@/lib/utils";
+import type {
+  FeedContributorView,
+  FeedItemMock,
+  FeedTrendingPlaceView,
+} from "@/types/feed";
+import type { SessionPayload } from "@/types/session";
+import { mapFeedItemDtoToView } from "@/utils/mappers/feed-mapper";
 
 import { FeedAside } from "./feed-aside";
 import type { FeedCardHandlers } from "./feed-card-frame";
@@ -19,31 +37,108 @@ import { FeedSourceChips } from "./feed-source-chips";
 import { ALL_REASONS, type FeedMute, useFeed } from "./use-feed";
 
 const SORTS: FeedSort[] = ["relevancia", "recente"];
-
-/**
- * Largura das duas colunas de conteúdo. Centralizada porque em tela larga a
- * folga sobraria toda depois da coluna de apoio; o cabeçalho e os chips seguem
- * ocupando a página inteira, como nas outras telas.
- */
 const FEED_COLUMNS = "mx-auto flex w-full max-w-6xl gap-6";
 
-/**
- * Feed do explorador.
- *
- * **Não existe "seguindo" aqui.** O produto trocou o grafo social por cinco
- * vínculos com a cidade — bairro, lugar acompanhado, categoria, movimento da
- * cidade e pauta da equipe —, todos deriváveis de `Visita` e `Favorita`, sem
- * tabela de relacionamento entre pessoas. Isso mata o cold start (feed novo
- * nunca abre vazio), tira a moderação de vínculo social do escopo e mantém o
- * assunto onde o produto quer: lugar, não gente. O detalhe está em
- * `docs/todo/user/feed.md`.
- *
- * É client porque nenhuma das entidades existe no banco: filtro, ordenação,
- * silenciamento e reação vivem no array de `src/mocks/feed.ts`.
- */
-export function FeedWorkspace() {
-  const feed = useFeed();
+interface FeedWorkspaceProps {
+  session: SessionPayload | null;
+  promises: {
+    feedPromise: Promise<getFeedResponse>;
+    mutesPromise: Promise<listFeedMutesResponse>;
+    explorersPromise: Promise<listExplorersResponse>;
+    trendingPlacesPromise: Promise<listPlacesResponse>;
+    statsPromise: Promise<getMyStatsResponse>;
+  };
+}
 
+/**
+ * Feed do explorador hidratado via Streaming SSR (`use()` + `useMemo()`).
+ */
+export function FeedWorkspace({ session, promises }: FeedWorkspaceProps) {
+  const feedResponse = use(promises.feedPromise);
+  const mutesResponse = use(promises.mutesPromise);
+  const explorersResponse = use(promises.explorersPromise);
+  const trendingPlacesResponse = use(promises.trendingPlacesPromise);
+  const statsResponse = use(promises.statsPromise);
+
+  const initialItems = useMemo<FeedItemMock[]>(() => {
+    if (feedResponse.status !== 200 || !feedResponse.data.items) return [];
+
+    return feedResponse.data.items
+      .map(mapFeedItemDtoToView)
+      .filter((item): item is FeedItemMock => item !== null);
+  }, [feedResponse]);
+
+  const initialMutes = useMemo<FeedMute[]>(() => {
+    if (mutesResponse.status !== 200 || !Array.isArray(mutesResponse.data))
+      return [];
+
+    return mutesResponse.data.map((muteRule) => ({
+      scope: (
+        muteRule.scopeType === 1
+          ? "bairro"
+          : muteRule.scopeType === 0
+            ? "categoria"
+            : "tipo"
+      ) as FeedMuteScope,
+      value: muteRule.scopeValue,
+      label: `Menos ${muteRule.scopeValue}`,
+      apiId: muteRule.id,
+    }));
+  }, [mutesResponse]);
+
+  const contributors = useMemo<FeedContributorView[]>(() => {
+    if (explorersResponse.status !== 200 || !explorersResponse.data.items)
+      return [];
+
+    return explorersResponse.data.items.slice(0, 4).map((explorer) => ({
+      id: explorer.id,
+      nome: explorer.name,
+      iniciais: explorer.name.slice(0, 2).toUpperCase(),
+      avatarUrl: explorer.avatarUrl ?? undefined,
+      conquistas: Number(explorer.achievementsCount),
+      contribuicoes: Number(explorer.contributionScore),
+      bairro: explorer.neighborhood ?? "Sorocaba",
+    }));
+  }, [explorersResponse]);
+
+  const trendingPlaces = useMemo<FeedTrendingPlaceView[]>(() => {
+    if (
+      trendingPlacesResponse.status !== 200 ||
+      !trendingPlacesResponse.data.items
+    )
+      return [];
+
+    return [...trendingPlacesResponse.data.items]
+      .sort(
+        (first, second) =>
+          Number(second.reviewsCount) - Number(first.reviewsCount),
+      )
+      .slice(0, 4)
+      .map((place) => ({
+        id: place.id,
+        nome: place.name,
+        bairro: place.neighborhood ?? "Sorocaba",
+        novidades: Math.max(1, Number(place.reviewsCount)),
+      }));
+  }, [trendingPlacesResponse]);
+
+  const profileSummary = useMemo(() => {
+    const data = statsResponse.status === 200 ? statsResponse.data : null;
+    const topCategories = data?.visitsByCategory
+      ? data.visitsByCategory
+          .slice(0, 2)
+          .map((categoryStat) => categoryStat.categoryName)
+      : [];
+
+    return {
+      bairro: session?.neighborhood ?? "Sorocaba",
+      categoriasFavoritas: topCategories,
+      lugaresSalvos: Number(data?.totalFavorites ?? 0),
+      visitasRegistradas: Number(data?.totalVisits ?? 0),
+    };
+  }, [statsResponse, session]);
+
+  const feed = useFeed({ initialItems, initialMutes });
   const { mute, unmute, toggleSave, toggleUseful, saved, useful } = feed;
 
   const onMute = useCallback(
@@ -51,7 +146,7 @@ export function FeedWorkspace() {
       mute(rule);
 
       toast.success(rule.label.replace("Menos", "Vendo menos"), {
-        description: "Vale só nesta sessão, enquanto o feed é fictício.",
+        description: "Preferência salva no seu feed.",
         action: { label: "Desfazer", onClick: () => unmute(rule) },
       });
     },
@@ -59,7 +154,7 @@ export function FeedWorkspace() {
   );
 
   const onSave = useCallback(
-    (placeId: number) => {
+    (placeId: string) => {
       const wasSaved = saved.has(placeId);
       toggleSave(placeId);
 
@@ -79,12 +174,13 @@ export function FeedWorkspace() {
     onMute,
     isSaved: (placeId) => saved.has(placeId),
     onSave,
-    isUseful: (itemId) => useful.has(itemId),
+    isUseful: (reviewId) => useful.has(reviewId),
     onUseful: toggleUseful,
   };
 
   return (
     <main className="flex flex-1 flex-col">
+      {/* feed - section */}
       <PageSection
         title="Feed"
         description="O que aconteceu nos lugares que te interessam — sem seguir ninguém"
@@ -153,6 +249,7 @@ export function FeedWorkspace() {
           </div>
         }
       >
+        {/* feed and aside - columns */}
         <div className={FEED_COLUMNS}>
           <div className="flex min-w-0 flex-1 flex-col gap-4">
             {feed.groups.every((group) => group.items.length === 0) ? (
@@ -209,6 +306,9 @@ export function FeedWorkspace() {
             counts={feed.countByReason}
             active={feed.filter}
             onFilterChange={feed.setFilter}
+            profileSummary={profileSummary}
+            contributors={contributors}
+            trendingPlaces={trendingPlaces}
           />
         </div>
       </PageSection>

@@ -206,6 +206,7 @@ export function TextFilterChip<TData>({
 export interface SelectFilterChipOption {
   label: string;
   value: string;
+  icon?: ReactNode;
 }
 
 /**
@@ -273,7 +274,10 @@ export function SelectFilterChip<TData>({
             {menuLabel && <SelectLabel>{menuLabel}</SelectLabel>}
             {options.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                <div className="flex items-center gap-2">
+                  {option.icon}
+                  <span>{option.label}</span>
+                </div>
               </SelectItem>
             ))}
           </SelectGroup>

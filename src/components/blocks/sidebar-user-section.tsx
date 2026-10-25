@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Separator } from "../ui/separator";
+import { FeedbackDialog } from "./feedback-dialog";
 
 interface SidebarUserSectionProps {
   userName?: string;
@@ -64,6 +65,7 @@ export function SidebarUserSection({
           <Button
             variant={"ghost"}
             className="flex flex-row gap-3 w-full justify-start"
+            onClick={() => router.push("/profile")}
           >
             <PencilIcon />
             <p>Editar perfil</p>
@@ -72,10 +74,13 @@ export function SidebarUserSection({
           <Button
             variant={"ghost"}
             className="flex flex-row gap-3 w-full justify-start"
+            onClick={() => router.push("/profile")}
           >
             <UserCircleIcon />
             <p>Gerenciar Conta</p>
           </Button>
+
+          <FeedbackDialog />
 
           <Button
             onClick={handleLogout}

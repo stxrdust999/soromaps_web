@@ -14,23 +14,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MODAL_CLOSE_DELAY_MS } from "@/constants/users";
-import type { getUserResponse } from "@/http/users/users";
+import type { adminGetUserResponse } from "@/http/users/users";
 import { responseToast } from "@/lib/toaster";
 
 interface DeleteUserModalProps {
   promises: {
-    userPromise: Promise<getUserResponse>;
+    userPromise: Promise<adminGetUserResponse>;
   };
 
-  userId: number;
+  userId: string;
 }
 
-/**
- * User deletion confirmation modal. Names the target user explicitly; no
- * form involved, the action takes only the id.
- *
- * @param props Data promise and the id to delete.
- */
 export function DeleteUserModal({ promises, userId }: DeleteUserModalProps) {
   const router = useRouter();
   const [open, setOpen] = useState<boolean>(true);
@@ -38,7 +32,7 @@ export function DeleteUserModal({ promises, userId }: DeleteUserModalProps) {
 
   const userResponse = use(promises.userPromise);
   const userName =
-    userResponse.status === 200 ? userResponse.data.userName : "este usuário";
+    userResponse.status === 200 ? userResponse.data.name : "este usuário";
 
   function handleCloseModal() {
     setOpen(false);
@@ -55,7 +49,7 @@ export function DeleteUserModal({ promises, userId }: DeleteUserModalProps) {
       if (!state.success) {
         responseToast.error({
           title: "Erro ao excluir usuário",
-          description: state.message,
+          description: state.message ?? "Não foi possível excluir o usuário.",
         });
         return;
       }

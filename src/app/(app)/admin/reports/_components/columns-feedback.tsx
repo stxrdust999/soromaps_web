@@ -27,7 +27,7 @@ import {
   FEEDBACK_STATUS_LABEL,
   type FeedbackKind,
   type FeedbackMock,
-} from "@/mocks/admin-reports";
+} from "@/types/reports";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 import { textSortingFn } from "@/utils/sorts/sort-by-text";
 

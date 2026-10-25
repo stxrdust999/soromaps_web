@@ -13,7 +13,7 @@
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Flash é o tier gratuito e o que dá vazão suficiente para redigir rascunho. */
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-2.0-flash";
 
 /** Rascunho longo estoura o tempo da action antes de estourar o limite. */
 const TIMEOUT_MS = 30_000;
@@ -42,6 +42,15 @@ interface GenerateJsonOptions {
 
 export function geminiModel(): string {
   return process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+}
+
+/**
+ * Retorna um nome amigável e legível do modelo de IA para exibição na interface.
+ */
+export function geminiModelDisplayName(): string {
+  const modelId = geminiModel().toLowerCase();
+  if (modelId.includes("gemini")) return "Gemini";
+  return "IA";
 }
 
 /**

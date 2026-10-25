@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { DuplicateHintMock } from "@/mocks/admin-moderation";
+import type { DuplicateHintMock } from "@/types/moderation";
 
 interface DuplicateDialogProps {
   open: boolean;
@@ -22,8 +22,7 @@ interface DuplicateDialogProps {
 }
 
 /**
- * Comparação campo a campo com o ponto já aprovado. Diferença entre os dois
- * lados fica destacada — o que é igual não precisa de leitura.
+ * Comparação campo a campo com o ponto já aprovado.
  */
 export function DuplicateDialog({
   open,
@@ -44,6 +43,7 @@ export function DuplicateDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* comparison - rows */}
         <div className="max-h-[56vh] overflow-auto">
           <div className="grid grid-cols-[130px_1fr_1fr] items-end gap-4 border-b px-2.5 pb-2.5">
             <span />

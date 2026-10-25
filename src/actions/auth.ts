@@ -1,112 +1,129 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { createSession } from "@/lib/session";
-import { type LoginSchema, loginSchema } from "@/validations/auth";
-import { type CreateUserSchema, createUserSchema } from "@/validations/users";
+import { login, logout, logoutAll } from "@/http/auth/auth";
+import { registerUser } from "@/http/users/users";
+import { getApiErrorMessage } from "@/helpers/api-error";
+import { clearAuthCookies, getRefreshToken, setAuthCookies } from "@/lib/session";
+import type { FormState } from "@/types/form";
+import { type LoginSchema, type RegisterSchema, loginSchema, registerSchema } from "@/validations/auth";
 
 /**
- * Realiza o login do usuário criando um cookie de sessão direto no servidor
- * @param data Dados do usuário (usuário e senha)
- * @returns Um objeto com sucesso ou erro
+ * Authenticates user credentials and establishes a session via httpOnly cookies.
  */
-export async function loginAction(data: LoginSchema) {
+export async function loginAction(data: LoginSchema): Promise<FormState> {
   const validation = loginSchema.safeParse(data);
-  if (!validation.success) return { error: "Formulário inválido." };
+  if (!validation.success)
+    return {
+      success: false,
+      message: "Algo de errado aconteceu, por favor tente novamente.",
+      errors: validation.error.flatten().fieldErrors as Record<string, string[]>,
+    };
 
   try {
-    const API_URL = process.env.API_URL;
-
-    const response = await fetch(`${API_URL}/api/auth/Login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(validation.data),
+    const response = await login({
+      email: validation.data.email,
+      password: validation.data.password,
     });
 
-    if (!response.ok) {
-      const errorMsg = await response.text();
-      return { error: errorMsg || "Credenciais inválidas." };
+    if (response.status !== 200) {
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, "Credenciais inválidas."),
+        errors: null,
+      };
     }
 
-    const user = await response.json();
+    await setAuthCookies(response.data);
 
-    const token = await createSession({
-      id: user.id,
-      userEmail: user.userEmail,
-      userName: user.userName,
-    });
-
-    const cookieStore = await cookies();
-    cookieStore.set("session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 dias
-    });
-
-    return { success: true };
+    return {
+      success: true,
+      message: "Login realizado com sucesso.",
+      errors: null,
+    };
   } catch (error) {
-    console.error("Action Error during login:", error);
-    return { error: "Erro de conexão com o servidor de autenticação." };
+    console.error("loginAction error:", error);
+    return {
+      success: false,
+      message: "Um erro ocorreu, por favor tente novamente em alguns minutos.",
+      errors: null,
+    };
   }
 }
 
 /**
- * Realiza o cadastro do usuário criando um cookie de sessão direto no servidor e loga o usuario em seguida
- * @param data Dados do usuário (usuário e senha)
- * @returns Um objeto com sucesso ou erro
+ * Registers a new explorer account and automatically signs in.
  */
-export async function registerAction(data: CreateUserSchema) {
-  const validation = createUserSchema.safeParse(data);
-  if (!validation.success) return { error: "Formulário inválido." };
+export async function registerAction(data: RegisterSchema): Promise<FormState> {
+  const validation = registerSchema.safeParse(data);
+  if (!validation.success)
+    return {
+      success: false,
+      message: "Algo de errado aconteceu, por favor tente novamente.",
+      errors: validation.error.flatten().fieldErrors as Record<string, string[]>,
+    };
 
   try {
-    const API_URL = process.env.API_URL;
-
-    const response = await fetch(`${API_URL}/api/users`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(validation.data),
+    const registerResponse = await registerUser({
+      name: validation.data.name,
+      email: validation.data.email,
+      password: validation.data.password,
     });
 
-    if (!response.ok) {
-      const errorMsg = await response.text();
-      return { error: errorMsg || "Erro ao registrar." };
+    if (registerResponse.status !== 201) {
+      return {
+        success: false,
+        message: getApiErrorMessage(registerResponse.data, "Erro ao registrar usuário."),
+        errors: null,
+      };
     }
 
-    const user = await response.json();
-
-    const token = await createSession({
-      id: user.id,
-      userEmail: user.email,
-      userName: user.userName,
+    const loginResponse = await login({
+      email: validation.data.email,
+      password: validation.data.password,
     });
 
-    const cookieStore = await cookies();
-    cookieStore.set("session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 dias
-    });
+    if (loginResponse.status === 200)
+      await setAuthCookies(loginResponse.data);
 
-    return { success: true };
+    return {
+      success: true,
+      message: "Usuário cadastrado com sucesso.",
+      errors: null,
+    };
   } catch (error) {
-    console.error("Action Error during register:", error);
-    return { error: "Erro de conexão com o servidor de autenticação." };
+    console.error("registerAction error:", error);
+    return {
+      success: false,
+      message: "Um erro ocorreu, por favor tente novamente em alguns minutos.",
+      errors: null,
+    };
   }
 }
 
 /**
- * Encerra a sessão do usuário deletando o cookie de sessão
+ * Revokes current device session in the API and clears local cookies.
  */
-export async function logoutAction() {
+export async function logoutAction(): Promise<void> {
   try {
-    const cookieStore = await cookies();
-    cookieStore.delete("session");
+    const refreshToken = await getRefreshToken();
+    if (refreshToken)
+      await logout({ refreshToken });
   } catch (error) {
-    console.error("Logout Error:", error);
+    console.error("logoutAction error:", error);
+  } finally {
+    await clearAuthCookies();
+  }
+}
+
+/**
+ * Revokes all active sessions for the user across all devices.
+ */
+export async function logoutAllAction(): Promise<void> {
+  try {
+    await logoutAll();
+  } catch (error) {
+    console.error("logoutAllAction error:", error);
+  } finally {
+    await clearAuthCookies();
   }
 }

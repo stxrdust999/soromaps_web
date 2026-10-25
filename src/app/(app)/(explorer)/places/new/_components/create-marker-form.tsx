@@ -2,11 +2,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImageIcon, Loader2Icon, MapPinnedIcon, SaveIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
-import { createMarkerAction } from "@/actions/markers";
+import {
+  confirmPlacePhotoAction,
+  createPlaceAction,
+  createPlacePhotoUploadUrlAction,
+} from "@/actions/places";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -27,43 +31,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { listCategoriesResponse } from "@/http/categories/categories";
 import { responseToast } from "@/lib/toaster";
 import { createMarkerSchema } from "@/validations/markers";
-
-/**
- * Placeholder vibes until the `Categoria` table exists — the real list comes
- * from the API once `/admin/categories` is built. Ver `docs/todo/admin/categories.md`.
- */
-const VIBE_OPTIONS = [
-  "Cafeteria",
-  "Restaurante",
-  "Bar",
-  "Parque",
-  "Point cultural",
-  "Compras",
-  "Vida noturna",
-  "Outro",
-] as const;
 
 const DESCRIPTION_MAX_LENGTH = 160;
 const SECRET_MAX_LENGTH = 200;
 
-/**
- * Everything the finished screen asks for. Only the three fields of
- * `createMarkerSchema` reach the API — the rest is validated here so the
- * flow can be reviewed before the backend gains the columns. Ver
- * `docs/propostas/2026-08-03-expansao-modelo-ponto.md`.
- */
 const createMarkerFormSchema = createMarkerSchema.extend({
-  foto: z.custom<File>((value) => value instanceof File, {
-    message: "Escolha uma foto do local",
-  }),
+  foto: z
+    .custom<File>((value) => value === undefined || value instanceof File)
+    .optional(),
+  bairro: z
+    .string()
+    .trim()
+    .min(2, "Informe o bairro do local")
+    .max(80, "No máximo 80 caracteres"),
   sobre: z
     .string()
     .trim()
     .min(1, "Conta rapidinho como é o lugar")
     .max(DESCRIPTION_MAX_LENGTH, `No máximo ${DESCRIPTION_MAX_LENGTH} letras`),
-  vibe: z.enum(VIBE_OPTIONS, { message: "Escolha uma vibe" }),
+  categoryId: z.string().min(1, "Escolha uma categoria"),
   temWifi: z.boolean(),
   petFriendly: z.boolean(),
   melhorHorario: z.string().trim().max(60, "No máximo 60 letras").optional(),
@@ -78,29 +67,41 @@ type CreateMarkerFormSchema = z.infer<typeof createMarkerFormSchema>;
 
 interface CreateMarkerFormProps {
   coords: { lat: number; lng: number };
-
-  /** Volta pro estágio de escolher a posição do pin, sem perder o preenchido. */
+  promises: {
+    categoriesPromise: Promise<listCategoriesResponse>;
+  };
   onChangeLocation: () => void;
   onSuccess: () => void;
 }
 
 /**
- * Segundo estágio da criação de local: a posição já foi confirmada e o
- * formulário coleta os dados. Só `nome`/`lat`/`lng` viajam pra API — os
- * outros campos existem para validar o fluxo antes de o schema crescer.
+ * Formulário de cadastro de novo local no mapa resolvendo categorias reais via React.use() + useMemo().
  */
 export function CreateMarkerForm({
   coords,
+  promises,
   onChangeLocation,
   onSuccess,
 }: CreateMarkerFormProps) {
+  const categoriesResponse = use(promises.categoriesPromise);
+
+  const categories = useMemo(() => {
+    const items =
+      categoriesResponse.status === 200
+        ? (categoriesResponse.data.items ?? [])
+        : [];
+    return items.filter((category) => category.isActive);
+  }, [categoriesResponse]);
+
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const form = useForm<CreateMarkerFormSchema>({
     resolver: zodResolver(createMarkerFormSchema),
     defaultValues: {
       nome: "",
+      bairro: "",
       sobre: "",
+      categoryId: categories[0]?.id ?? "",
       temWifi: false,
       petFriendly: false,
       melhorHorario: "",
@@ -112,24 +113,31 @@ export function CreateMarkerForm({
   const { isSubmitting } = form.formState;
 
   useEffect(() => {
-    // A coordenada muda quando o usuário volta e reposiciona o pin
     form.setValue("lat", coords.lat);
     form.setValue("lng", coords.lng);
   }, [coords.lat, coords.lng, form]);
 
   useEffect(() => {
     return () => {
-      if (photoPreview) URL.revokeObjectURL(photoPreview);
+      if (photoPreview)
+        URL.revokeObjectURL(photoPreview);
     };
   }, [photoPreview]);
 
   async function onSubmitForm(data: CreateMarkerFormSchema) {
-    const formData = new FormData();
-    formData.set("nome", data.nome);
-    formData.set("lat", String(data.lat));
-    formData.set("lng", String(data.lng));
-
-    const state = await createMarkerAction(formData);
+    const state = await createPlaceAction({
+      categoryId: data.categoryId,
+      name: data.nome,
+      latitude: data.lat,
+      longitude: data.lng,
+      neighborhood: data.bairro,
+      about: data.sobre,
+      description: data.sobre,
+      hasWifi: data.temWifi,
+      isPetFriendly: data.petFriendly,
+      bestTime: data.melhorHorario || null,
+      localSecret: data.segredoLocal || null,
+    });
 
     if (!state.success) {
       responseToast.error({
@@ -139,9 +147,41 @@ export function CreateMarkerForm({
       return;
     }
 
+    /** Uploads cover photo to Supabase Storage if the user attached a file. */
+    if (data.foto instanceof File && state.placeId) {
+      const extension = data.foto.name.split(".").pop() ?? "jpg";
+      const uploadUrlResult = await createPlacePhotoUploadUrlAction(
+        state.placeId,
+        extension,
+      );
+
+      if (uploadUrlResult.success && uploadUrlResult.data) {
+        try {
+          const uploadResponse = await fetch(uploadUrlResult.data.uploadUrl, {
+            method: "PUT",
+            body: data.foto,
+            headers: {
+              "Content-Type": data.foto.type || "image/jpeg",
+            },
+          });
+
+          if (uploadResponse.ok) {
+            await confirmPlacePhotoAction(
+              state.placeId,
+              uploadUrlResult.data.publicUrl,
+              uploadUrlResult.data.storagePath,
+              true,
+            );
+          }
+        } catch {
+          // O local já foi criado; falha eventual no upload da foto não invalida o cadastro
+        }
+      }
+    }
+
     responseToast.success({
       title: state.message,
-      description: `${data.nome} já aparece no mapa.`,
+      description: `${data.nome} foi enviado para análise da moderação.`,
     });
 
     onSuccess();
@@ -154,12 +194,13 @@ export function CreateMarkerForm({
         className="flex flex-col gap-4"
       >
         <div className="-mr-2 max-h-[45vh] space-y-4 overflow-y-auto pr-2">
+          {/* foto - field */}
           <FormField
             control={form.control}
             name="foto"
             render={({ field: { value, onChange, ...field } }) => (
               <FormItem>
-                <FormLabel>Foto do local</FormLabel>
+                <FormLabel>Foto do local (opcional)</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -192,6 +233,7 @@ export function CreateMarkerForm({
             )}
           />
 
+          {/* nome - field */}
           <FormField
             control={form.control}
             name="nome"
@@ -206,6 +248,25 @@ export function CreateMarkerForm({
             )}
           />
 
+          {/* bairro - field */}
+          <FormField
+            control={form.control}
+            name="bairro"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Bairro</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Ex.: Centro, Santa Rosália, Campolim..."
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* sobre - field */}
           <FormField
             control={form.control}
             name="sobre"
@@ -224,22 +285,23 @@ export function CreateMarkerForm({
             )}
           />
 
+          {/* categoryId - field */}
           <FormField
             control={form.control}
-            name="vibe"
+            name="categoryId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Categoria / vibe</FormLabel>
+                <FormLabel>Categoria</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Qual é a vibe do rolê?" />
+                      <SelectValue placeholder="Escolha a categoria do local" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {VIBE_OPTIONS.map((vibe) => (
-                      <SelectItem key={vibe} value={vibe}>
-                        {vibe}
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -249,6 +311,7 @@ export function CreateMarkerForm({
             )}
           />
 
+          {/* amenities - section */}
           <div className="flex flex-col gap-3">
             <FormField
               control={form.control}
@@ -261,7 +324,7 @@ export function CreateMarkerForm({
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                  <FormLabel className="font-normal">Tem wifi</FormLabel>
+                  <FormLabel className="font-normal">Tem wi-fi</FormLabel>
                 </FormItem>
               )}
             />
@@ -277,12 +340,13 @@ export function CreateMarkerForm({
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                  <FormLabel className="font-normal">É petfriendly</FormLabel>
+                  <FormLabel className="font-normal">É pet friendly</FormLabel>
                 </FormItem>
               )}
             />
           </div>
 
+          {/* melhorHorario - field */}
           <FormField
             control={form.control}
             name="melhorHorario"
@@ -301,6 +365,7 @@ export function CreateMarkerForm({
             )}
           />
 
+          {/* segredoLocal - field */}
           <FormField
             control={form.control}
             name="segredoLocal"
@@ -321,6 +386,7 @@ export function CreateMarkerForm({
           />
         </div>
 
+        {/* actions - section */}
         <div className="flex gap-3">
           <Button
             type="button"

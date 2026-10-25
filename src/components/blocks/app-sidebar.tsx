@@ -9,7 +9,11 @@ import {
   SidebarHeader,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { SIDEBAR_NAV } from "@/constants/navigation";
+import {
+  NAV_GROUP_ADMIN,
+  NAV_GROUP_EXPLORER,
+  NAV_GROUP_GENERAL,
+} from "@/constants/navigation";
 import { getSession } from "@/lib/session";
 import { SidebarRouteButton } from "./sidebar-route-button";
 import { SidebarUserSection } from "./sidebar-user-section";
@@ -17,9 +21,16 @@ import { SidebarUserSection } from "./sidebar-user-section";
 export async function AppSidebar() {
   const session = await getSession();
 
-  const name = session?.userName;
-  const email = session?.userEmail;
+  const name = session?.name ?? "Usuário";
+  const email = session?.email ?? "";
   const initials = name?.charAt(0).toUpperCase() ?? "U";
+  const isAdmin = session?.role === "admin";
+
+  const navigationGroups = [
+    NAV_GROUP_GENERAL,
+    NAV_GROUP_EXPLORER,
+    ...(isAdmin ? [NAV_GROUP_ADMIN] : []),
+  ];
 
   return (
     <Sidebar className="overflow-hidden">
@@ -41,7 +52,7 @@ export async function AppSidebar() {
       <SidebarSeparator className="mx-0 w-full shrink-0 bg-black/30" />
 
       <SidebarContent className="gap-0">
-        {SIDEBAR_NAV.map((group) => (
+        {navigationGroups.map((group) => (
           <SidebarGroup key={group.label} className="flex flex-col gap-0">
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent className="flex flex-col gap-0">

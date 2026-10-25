@@ -11,12 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import {
-  MODERATION_CATEGORIES,
-  type ModerationItemMock,
-  type ModerationStatus,
-  moderationSummaryMock,
-} from "@/mocks/admin-moderation";
+import type { ModerationItemMock, ModerationStatus } from "@/types/moderation";
 
 import { QueueItem } from "./queue-item";
 import { ALL_CATEGORIES } from "./use-moderation-queue";
@@ -30,6 +25,8 @@ const STATUS_OPTIONS: { value: ModerationStatus; label: string }[] = [
 
 interface QueuePanelProps {
   items: ModerationItemMock[];
+  categories: string[];
+  tempoMedio: string;
   selectedId: string | null;
   markedIds: string[];
   filters: {
@@ -49,9 +46,13 @@ interface QueuePanelProps {
   onRejectMarked: () => void;
 }
 
-/** Coluna da esquerda: filtros, fila ordenada por idade e ação em lote. */
+/**
+ * Coluna da esquerda da moderação: filtros, fila ordenada por idade e ação em lote.
+ */
 export function QueuePanel({
   items,
+  categories,
+  tempoMedio,
   selectedId,
   markedIds,
   filters,
@@ -64,6 +65,7 @@ export function QueuePanel({
 }: QueuePanelProps) {
   return (
     <section className="relative flex h-full flex-col border-r">
+      {/* filters - toolbar */}
       <div className="flex shrink-0 flex-col gap-2.5 px-4 pt-3.5 pb-2.5">
         <div className="flex gap-2">
           <Select
@@ -97,7 +99,7 @@ export function QueuePanel({
               <SelectItem value={ALL_CATEGORIES}>
                 Todas as categorias
               </SelectItem>
-              {MODERATION_CATEGORIES.map((categoria) => (
+              {categories.map((categoria) => (
                 <SelectItem key={categoria} value={categoria}>
                   {categoria}
                 </SelectItem>
@@ -125,6 +127,7 @@ export function QueuePanel({
         </div>
       </div>
 
+      {/* queue - list */}
       <div className="min-h-0 flex-1 overflow-auto px-2 pb-4">
         {items.length === 0 ? (
           <div className="flex flex-col items-center px-7 py-16 text-center">
@@ -139,7 +142,7 @@ export function QueuePanel({
             <p className="text-muted-foreground mt-4 text-sm">
               Tempo médio nesta semana:{" "}
               <span className="text-foreground font-semibold">
-                {moderationSummaryMock.tempoMedio}
+                {tempoMedio}
               </span>
             </p>
           </div>
@@ -157,6 +160,7 @@ export function QueuePanel({
         )}
       </div>
 
+      {/* bulk actions - bar */}
       <div
         className={cn(
           "bg-foreground text-background absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-lg py-2 pr-2 pl-3.5 transition-opacity",

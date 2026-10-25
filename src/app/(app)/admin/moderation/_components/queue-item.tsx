@@ -5,12 +5,11 @@ import { ClockIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { ModerationItemMock } from "@/mocks/admin-moderation";
+import type { ModerationItemMock } from "@/types/moderation";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 
 import { isIncomplete } from "./use-moderation-queue";
 
-/** Acima disso a idade deixa de ser informação e vira alerta. */
 const OVERDUE_DAYS = 7;
 
 interface QueueItemProps {
@@ -21,7 +20,9 @@ interface QueueItemProps {
   onToggleMark: () => void;
 }
 
-/** Linha da fila: foto, identificação, idade e os selos de risco. */
+/**
+ * Linha da fila de moderação: foto, identificação, idade e selos de risco.
+ */
 export function QueueItem({
   item,
   isSelected,

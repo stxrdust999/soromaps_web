@@ -10,7 +10,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { ProfileWeekActivity } from "@/mocks/profile";
+import type { ProfileWeekActivity } from "@/types/profile";
 
 const chartConfig = {
   visitas: { label: "Visitas", color: "var(--chart-2)" },

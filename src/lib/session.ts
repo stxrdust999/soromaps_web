@@ -1,125 +1,138 @@
 import { cookies } from "next/headers";
+import type { SessionPayload, SessionUser } from "@/types/session";
 
-const encoder = new TextEncoder();
+const ACCESS_TOKEN_COOKIE = "soromaps_access_token";
+const REFRESH_TOKEN_COOKIE = "soromaps_refresh_token";
+const USER_COOKIE = "soromaps_user";
 
-// Import process.env.SESSION_SECRET into a Cryptographic Key format
-async function getSecretKey() {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) {
-    throw new Error(
-      "SESSION_SECRET must be defined in your environment variables",
-    );
-  }
-  const keyData = encoder.encode(secret);
-  return crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"],
-  );
-}
-
-// Helper to convert Uint8Array bytes to URL-safe Base64
-function uint8ArrayToBase64Url(uint8Array: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < uint8Array.byteLength; i++) {
-    binary += String.fromCharCode(uint8Array[i]);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-// Helper to convert URL-safe Base64 to Uint8Array bytes
-function base64UrlToUint8Array(base64Url: string): Uint8Array {
-  const base64 = base64Url
+function base64UrlDecode(input: string): string {
+  const base64 = input
     .replace(/-/g, "+")
     .replace(/_/g, "/")
-    .padEnd(base64Url.length + ((4 - (base64Url.length % 4)) % 4), "=");
-  const binary = atob(base64);
-  const uint8Array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    uint8Array[i] = binary.charCodeAt(i);
-  }
-  return uint8Array;
-}
-
-export interface SessionPayload {
-  id: number;
-  userName: string;
-  userEmail: string;
-  exp?: number;
+    .padEnd(input.length + ((4 - (input.length % 4)) % 4), "=");
+  return atob(base64);
 }
 
 /**
- * Signs and creates a valid Session JWT cookie string
+ * Decodes standard JWT claims without cryptographic verification.
+ * Used for reading expiration timestamp and roles in Edge middleware and server components.
  */
-async function createSession(
-  payload: Omit<SessionPayload, "exp">,
-  durationInMs = 7 * 24 * 60 * 60 * 1000, // 7 Days default duration
-): Promise<string> {
-  const key = await getSecretKey();
-  const header = { alg: "HS256", typ: "JWT" };
-  const exp = Date.now() + durationInMs;
-  const fullPayload: SessionPayload = { ...payload, exp };
-
-  const headerB64 = uint8ArrayToBase64Url(
-    encoder.encode(JSON.stringify(header)),
-  );
-  const payloadB64 = uint8ArrayToBase64Url(
-    encoder.encode(JSON.stringify(fullPayload)),
-  );
-
-  const dataToSign = encoder.encode(`${headerB64}.${payloadB64}`);
-  const signature = await crypto.subtle.sign("HMAC", key, dataToSign);
-  const signatureB64 = uint8ArrayToBase64Url(new Uint8Array(signature));
-
-  return `${headerB64}.${payloadB64}.${signatureB64}`;
-}
-
-/**
- * Decrypts, verifies, and returns valid payload. Returns null if invalid or expired.
- */
-async function decryptSession(token: string): Promise<SessionPayload | null> {
+export function decodeJwtClaims(
+  token: string,
+): { sub?: string; email?: string; role?: string; exp?: number } | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-
-    const [headerB64, payloadB64, signatureB64] = parts;
-    const key = await getSecretKey();
-    const dataToVerify = encoder.encode(`${headerB64}.${payloadB64}`);
-    const signature = base64UrlToUint8Array(signatureB64);
-
-    const isValid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signature as BufferSource,
-      dataToVerify as BufferSource,
-    );
-    if (!isValid) return null;
-
-    const payloadStr = new TextDecoder().decode(
-      base64UrlToUint8Array(payloadB64),
-    );
-    const payload: SessionPayload = JSON.parse(payloadStr);
-
-    if (payload.exp && Date.now() > payload.exp) {
-      return null; // Token has expired
-    }
-
-    return payload;
-  } catch (_error) {
-    return null; // Invalid token format or parsing error
+    const payloadJson = base64UrlDecode(parts[1]);
+    return JSON.parse(payloadJson);
+  } catch {
+    return null;
   }
 }
 
-async function getSession() {
+/**
+ * Stores authentication tokens and basic profile information in secure httpOnly cookies.
+ */
+export async function setAuthCookies(authData: {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number | string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    avatarUrl?: string | null;
+    neighborhood?: string | null;
+  };
+}): Promise<void> {
   const cookieStore = await cookies();
+  const isProduction = process.env.NODE_ENV === "production";
 
-  const token = cookieStore.get("session")?.value;
+  const maxAgeSeconds =
+    typeof authData.expiresIn === "string"
+      ? parseInt(authData.expiresIn, 10) || 3600
+      : authData.expiresIn;
 
-  if (!token) return null;
+  cookieStore.set(ACCESS_TOKEN_COOKIE, authData.accessToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+    maxAge: maxAgeSeconds,
+  });
 
-  return await decryptSession(token);
+  cookieStore.set(REFRESH_TOKEN_COOKIE, authData.refreshToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60,
+  });
+
+  const sessionUser: SessionUser = {
+    id: authData.user.id,
+    name: authData.user.name,
+    email: authData.user.email,
+    role: authData.user.role.toLowerCase() === "admin" ? "admin" : "explorer",
+    avatarUrl: authData.user.avatarUrl,
+    neighborhood: authData.user.neighborhood,
+  };
+
+  cookieStore.set(USER_COOKIE, JSON.stringify(sessionUser), {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60,
+  });
 }
 
-export { getSession, createSession, decryptSession };
+/**
+ * Removes all authentication and session identity cookies.
+ */
+export async function clearAuthCookies(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(ACCESS_TOKEN_COOKIE);
+  cookieStore.delete(REFRESH_TOKEN_COOKIE);
+  cookieStore.delete(USER_COOKIE);
+}
+
+/**
+ * Reads the active Bearer access token from incoming request cookies.
+ */
+export async function getAccessToken(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+}
+
+/**
+ * Reads the active refresh token from incoming request cookies.
+ */
+export async function getRefreshToken(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
+}
+
+/**
+ * Resolves current session payload combining profile metadata and token expiration.
+ */
+export async function getSession(): Promise<SessionPayload | null> {
+  const cookieStore = await cookies();
+  const userCookie = cookieStore.get(USER_COOKIE)?.value;
+  const token = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+
+  if (!userCookie) return null;
+
+  try {
+    const user = JSON.parse(userCookie) as SessionUser;
+    const claims = token ? decodeJwtClaims(token) : null;
+
+    return {
+      ...user,
+      exp: claims?.exp ? claims.exp * 1000 : undefined,
+    };
+  } catch {
+    return null;
+  }
+}

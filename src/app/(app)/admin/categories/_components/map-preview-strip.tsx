@@ -1,4 +1,4 @@
-import type { CategoryMock } from "@/mocks/admin-categories";
+import type { CategoryViewModel } from "./use-categories";
 
 import { CategoryPin } from "./category-pin";
 
@@ -6,7 +6,7 @@ import { CategoryPin } from "./category-pin";
 const OFFSETS = [0, -14, 10, -6, 14, -10, 4, -16];
 
 interface MapPreviewStripProps {
-  categories: CategoryMock[];
+  categories: CategoryViewModel[];
 }
 
 /**

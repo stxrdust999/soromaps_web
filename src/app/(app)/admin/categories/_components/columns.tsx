@@ -11,12 +11,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CategoryMock } from "@/mocks/admin-categories";
 import { textSortingFn } from "@/utils/sorts/sort-by-text";
 
 import { CategoryPin } from "./category-pin";
 import { CategoryRowAction, type CategoryRowActions } from "./row-action";
-import { findColorCollision } from "./use-categories";
+import { findColorCollision, type CategoryViewModel } from "./use-categories";
 
 /** Fonte única de `columnId -> rótulo`, consumida por header e filtro. */
 export const categoryColumnsNames = {
@@ -31,7 +30,7 @@ export const categoryColumnsNames = {
 
 interface CreateColumnsOptions extends CategoryRowActions {
   /** Catálogo inteiro — o alerta de cor compara cada linha com as demais. */
-  categories: CategoryMock[];
+  categories: CategoryViewModel[];
 }
 
 /**
@@ -47,7 +46,7 @@ interface CreateColumnsOptions extends CategoryRowActions {
 export function createCategoryColumns({
   categories,
   ...actions
-}: CreateColumnsOptions): ColumnDef<CategoryMock>[] {
+}: CreateColumnsOptions): ColumnDef<CategoryViewModel>[] {
   const maxPontos = Math.max(...categories.map((c) => c.pontos), 1);
   const lastOrder = categories.length;
 
@@ -326,7 +325,7 @@ export function createCategoryColumns({
   ];
 }
 
-function ColorSample({ category }: { category: CategoryMock }) {
+function ColorSample({ category }: { category: CategoryViewModel }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
       <CategoryPin icone={category.icone} cor={category.cor} size={26} />

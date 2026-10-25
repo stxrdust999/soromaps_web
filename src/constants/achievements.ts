@@ -1,3 +1,12 @@
+export const ACHIEVEMENTS_LIST_TAG = "achievements:list";
+export const achievementShowTag = (id: string) => `achievements:${id}`;
+export const MY_ACHIEVEMENTS_TAG = "users:me:achievements";
+export const MY_VISITS_TAG = "users:me:visits";
+export const MY_FAVORITES_TAG = "users:me:favorites";
+export const MY_STATS_TAG = "users:me:stats";
+export const MY_VERIFICATION_TAG = "users:me:verification";
+export const MY_REVIEWS_TAG = "users:me:reviews";
+
 import {
   Activity,
   Award,
@@ -73,6 +82,17 @@ export const ACHIEVEMENT_ICONS = {
 } satisfies Record<string, LucideIcon>;
 
 export type AchievementIconKey = keyof typeof ACHIEVEMENT_ICONS;
+
+/**
+ * Resolve o nome de ícone retornado pela API para uma chave válida do catálogo de conquistas.
+ */
+export function resolveAchievementIcon(
+  iconName?: string | null,
+): AchievementIconKey {
+  if (iconName && iconName in ACHIEVEMENT_ICONS)
+    return iconName as AchievementIconKey;
+  return "award";
+}
 
 /** Tupla não-vazia: é o que faz `z.enum` inferir a união literal. */
 export const ACHIEVEMENT_ICON_KEYS = Object.keys(ACHIEVEMENT_ICONS) as [

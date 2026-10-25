@@ -2,7 +2,6 @@ import { NavigationIcon } from "lucide-react";
 
 import { PlaceCard } from "@/components/blocks/place-card";
 import { PlaceRail } from "@/components/blocks/place-rail";
-import { getMarkerDetailsMock } from "@/mocks/markers";
 import type { MarkerResource } from "@/types/marker";
 
 const NEARBY_LIMIT = 6;
@@ -12,22 +11,15 @@ interface FeedNearbySectionProps {
 }
 
 /**
- * Locais mais próximos. É a seção que só a home justifica: fora do mapa,
- * proximidade perde o contexto que a torna útil.
- *
- * A distância ainda é fictícia (`getMarkerDetailsMock`) — vira cálculo real
- * quando houver a posição do usuário.
+ * Trilho horizontal dos locais mais próximos ao centro do mapa na página inicial.
  */
 export function FeedNearbySection({ markers }: FeedNearbySectionProps) {
   const nearby = [...markers]
-    .sort(
-      (a, b) =>
-        getMarkerDetailsMock(a.id).distancia -
-        getMarkerDetailsMock(b.id).distancia,
-    )
+    .sort((first, second) => (first.distanceKm ?? 0) - (second.distanceKm ?? 0))
     .slice(0, NEARBY_LIMIT);
 
-  if (nearby.length === 0) return null;
+  if (nearby.length === 0)
+    return null;
 
   return (
     <PlaceRail

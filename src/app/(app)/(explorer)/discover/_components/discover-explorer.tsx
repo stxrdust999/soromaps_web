@@ -2,6 +2,7 @@
 
 import { FlameIcon, GemIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
+import { use, useMemo } from "react";
 
 import { PageSection } from "@/components/blocks/page-section";
 import { PlaceCard } from "@/components/blocks/place-card";
@@ -9,7 +10,8 @@ import { PlaceRail } from "@/components/blocks/place-rail";
 import { SiteFooter } from "@/components/blocks/site-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { MarkerResource } from "@/types/marker";
+import type { listPlacesResponse } from "@/http/places/places";
+import { mapPlaceSummaryToMarker } from "@/utils/mappers/place-mapper";
 
 import { CategoryChips } from "./category-chips";
 import { DiscoverHero } from "./discover-hero";
@@ -20,27 +22,26 @@ import { TopRatedList } from "./top-rated-list";
 import { useDiscover } from "./use-discover";
 import { VibeChips } from "./vibe-chips";
 
-/** Mesmo eixo centralizado do feed, para as duas telas de leitura baterem. */
 const CONTENT_WIDTH = "mx-auto flex w-full max-w-6xl flex-col gap-10";
 
 interface DiscoverExplorerProps {
-  markers: MarkerResource[];
+  promises: {
+    placesPromise: Promise<listPlacesResponse>;
+  };
 }
 
 /**
- * Descobrir.
- *
- * A página tem **quatro pesos**, de cima para baixo, e é isso que a torna
- * navegável: um destaque grande que convida (carrossel), três cards largos do
- * que está bombando, duas colunas densas para comparar de relance, e as
- * trilhas de garimpo no fim. Antes eram cinco seções de peso igual, todas
- * pedindo o mesmo gesto de rolar na horizontal.
- *
- * Client porque filtro e busca são a tela inteira — a lista chega pronta do
- * servidor e não volta a ser buscada. O que cada trilha significa está em
- * `use-discover.ts`.
+ * Superfície interativa da tela Descobrir resolvida via React.use() + useMemo().
  */
-export function DiscoverExplorer({ markers }: DiscoverExplorerProps) {
+export function DiscoverExplorer({ promises }: DiscoverExplorerProps) {
+  const placesResponse = use(promises.placesPromise);
+
+  const markers = useMemo(() => {
+    const places =
+      placesResponse.status === 200 ? (placesResponse.data.items ?? []) : [];
+    return places.map(mapPlaceSummaryToMarker);
+  }, [placesResponse]);
+
   const {
     filter,
     setFilter,
@@ -69,6 +70,7 @@ export function DiscoverExplorer({ markers }: DiscoverExplorerProps) {
         }
         subitems={
           <div className="mt-4 flex flex-col gap-3">
+            {/* search and filters - section */}
             <DiscoverSearch search={search} onSearchChange={setSearch} />
 
             <CategoryChips
@@ -89,8 +91,10 @@ export function DiscoverExplorer({ markers }: DiscoverExplorerProps) {
             </p>
           ) : (
             <>
+              {/* hero - section */}
               <DiscoverHero places={rails.featured} />
 
+              {/* trending - section */}
               <section className="flex flex-col gap-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <h2 className="flex items-center gap-1.5 font-semibold text-lg">
@@ -120,11 +124,13 @@ export function DiscoverExplorer({ markers }: DiscoverExplorerProps) {
                 </div>
               </section>
 
+              {/* rankings - section */}
               <div className="grid gap-6 lg:grid-cols-2">
                 <NearbyList places={rails.nearby} />
                 <TopRatedList places={rails.topRated} />
               </div>
 
+              {/* hidden gems - section */}
               {rails.hiddenGems.length > 0 && (
                 <PlaceRail
                   title="Joias escondidas"
@@ -145,6 +151,7 @@ export function DiscoverExplorer({ markers }: DiscoverExplorerProps) {
                 </PlaceRail>
               )}
 
+              {/* recent - section */}
               <RecentlyAddedRail places={rails.recent} />
             </>
           )}

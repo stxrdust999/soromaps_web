@@ -9,9 +9,8 @@ import { cn } from "@/lib/utils";
 import {
   REASON_LABEL,
   type ReportCaseMock,
-  reportedAuthorsMock,
   TARGET_LABEL,
-} from "@/mocks/admin-reports";
+} from "@/types/reports";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 import { ReportSignalBadges } from "./report-signal-badges";
 import { ReportedContent } from "./reported-content";
@@ -38,7 +37,7 @@ export function ReportDetail({
   onDiscard,
   onRemove,
 }: ReportDetailProps) {
-  const author = reportedAuthorsMock[report.autorId];
+  const author = report.autor;
   const signals = getReportSignals(report);
   const tallies = tallyReasons(report);
 

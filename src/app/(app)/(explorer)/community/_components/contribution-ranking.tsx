@@ -15,48 +15,55 @@ import {
 } from "@/components/ui/card";
 import { explorerTitle } from "@/constants/explorer-titles";
 import { cn } from "@/lib/utils";
-import {
-  currentExplorerMock,
-  type ExplorerMock,
-  explorersMock,
-  totalContributions,
-} from "@/mocks/community";
+import { type ExplorerView, totalContributions } from "@/types/community";
 
-/** Posições visíveis antes de a lista virar rolagem infinita de nada. */
 const TOP_LIMIT = 8;
 
 type RankingScope = "geral" | "bairro";
 
+interface ContributionRankingProps {
+  explorers: ExplorerView[];
+  currentUserId?: string;
+  currentUserNeighborhood?: string;
+}
+
 /**
  * Ranking de contribuição, geral e do bairro.
- *
- * O recorte por bairro é o ponto do módulo, não um filtro a mais: no ranking
- * geral só os dez primeiros existem e o resto nunca se vê na lista; por
- * bairro, quase todo explorador ativo é destaque de alguma coisa —
- * reconhecimento distribuído é retenção distribuída.
- *
- * A linha do próprio usuário fica fixa no rodapé quando ele está fora do topo:
- * ranking em que a pessoa não se acha é ranking que ela não acompanha.
  */
-export function ContributionRanking() {
+export function ContributionRanking({
+  explorers,
+  currentUserId,
+  currentUserNeighborhood = "Centro",
+}: ContributionRankingProps) {
   const [scope, setScope] = useState<RankingScope>("geral");
 
+  const currentExplorer = useMemo(
+    () => explorers.find((person) => person.id === currentUserId) ?? null,
+    [explorers, currentUserId],
+  );
+
+  const activeNeighborhood =
+    currentExplorer?.bairro ?? currentUserNeighborhood ?? "Centro";
+
   const ranked = useMemo(() => {
-    const pool = [...explorersMock, currentExplorerMock].filter(
-      (person) =>
-        scope === "geral" || person.bairro === currentExplorerMock.bairro,
+    const pool = explorers.filter(
+      (person) => scope === "geral" || person.bairro === activeNeighborhood,
     );
 
-    return pool.sort((a, b) => totalContributions(b) - totalContributions(a));
-  }, [scope]);
+    return [...pool].sort(
+      (first, second) =>
+        totalContributions(second) - totalContributions(first),
+    );
+  }, [explorers, scope, activeNeighborhood]);
 
-  const myPosition = ranked.findIndex(
-    (person) => person.id === currentExplorerMock.id,
-  );
+  const myPosition = currentUserId
+    ? ranked.findIndex((person) => person.id === currentUserId)
+    : -1;
   const isOutsideTop = myPosition >= TOP_LIMIT;
 
   return (
     <Card size="sm" className="gap-3">
+      {/* header - title */}
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrophyIcon className="size-4 text-amber-500" />
@@ -67,6 +74,7 @@ export function ContributionRanking() {
         </CardDescription>
       </CardHeader>
 
+      {/* ranking - list */}
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
           <Button
@@ -92,7 +100,7 @@ export function ContributionRanking() {
                 "bg-background text-foreground shadow-xs hover:bg-background",
             )}
           >
-            {currentExplorerMock.bairro}
+            {activeNeighborhood}
           </Button>
         </div>
 
@@ -102,15 +110,17 @@ export function ContributionRanking() {
               key={person.id}
               explorer={person}
               position={index + 1}
+              isMe={person.id === currentUserId}
             />
           ))}
         </ol>
 
-        {isOutsideTop && (
+        {isOutsideTop && currentExplorer && (
           <div className="border-border border-t pt-2">
             <RankingRow
-              explorer={currentExplorerMock}
+              explorer={currentExplorer}
               position={myPosition + 1}
+              isMe
             />
           </div>
         )}
@@ -120,13 +130,12 @@ export function ContributionRanking() {
 }
 
 interface RankingRowProps {
-  explorer: ExplorerMock;
+  explorer: ExplorerView;
   position: number;
+  isMe: boolean;
 }
 
-function RankingRow({ explorer, position }: RankingRowProps) {
-  const isMe = explorer.id === currentExplorerMock.id;
-
+function RankingRow({ explorer, position, isMe }: RankingRowProps) {
   const content = (
     <>
       <span className="w-5 shrink-0 text-center text-muted-foreground text-xs tabular-nums">

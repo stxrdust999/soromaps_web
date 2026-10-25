@@ -23,7 +23,7 @@ import {
   ACHIEVEMENT_EVENTS,
   TRIGGER_LABEL,
 } from "@/constants/achievements";
-import type { AchievementMock } from "@/mocks/admin-achievements";
+import type { AchievementMock } from "@/types/achievements";
 import { hasActiveFilters } from "@/utils/table/has-active-filters";
 
 import { achievementColumnsNames } from "./columns";
@@ -42,9 +42,10 @@ const STATUS_OPTIONS: SelectFilterChipOption[] = [
 ];
 
 const RARITY_OPTIONS: SelectFilterChipOption[] = [
-  { value: "zero", label: "Ninguém tirou" },
-  { value: "rara", label: "Menos de 10%" },
-  { value: "comum", label: "Mais de 50%" },
+  { value: "zero", label: "Ninguém tirou (0%)" },
+  { value: "rara", label: "Rara (< 10%)" },
+  { value: "moderada", label: "Moderada (10% - 50%)" },
+  { value: "comum", label: "Comum (> 50%)" },
 ];
 
 interface AchievementsToolbarProps {

@@ -6,7 +6,6 @@ import {
   EllipsisVerticalIcon,
   ExternalLinkIcon,
   MapPinIcon,
-  RotateCcwIcon,
   ScanSearchIcon,
   Trash2Icon,
   TriangleAlertIcon,
@@ -28,11 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import {
-  REVIEW_STATUS_LABEL,
-  type ReviewMock,
-  reviewAuthorsMock,
-} from "@/mocks/admin-reviews";
+import { REVIEW_STATUS_LABEL, type ReviewMock } from "@/types/reviews";
 import { formatWaitingDays } from "@/utils/formatters/format-waiting-days";
 import { textSortingFn } from "@/utils/sorts/sort-by-text";
 
@@ -60,21 +55,14 @@ export interface ReviewRowActions {
   onFilterByAuthor: (review: ReviewMock) => void;
   onFilterByPlace: (review: ReviewMock) => void;
   onRemove: (review: ReviewMock) => void;
-  onRestore: (review: ReviewMock) => void;
 }
 
 interface CreateColumnsOptions extends ReviewRowActions {
-  /** Sinais pré-calculados por id — evita recomputar a cada célula. */
   signalsById: Map<string, ReviewSignal[]>;
 }
 
 /**
- * Colunas da listagem de avaliações.
- *
- * Fábrica porque as ações fecham sobre callbacks da tela. O objeto precisa
- * chegar memoizado — TanStack compara colunas por referência.
- *
- * @param options Sinais por id e callbacks das ações de linha.
+ * Colunas da listagem administrativa de avaliações.
  */
 export function createReviewColumns({
   signalsById,
@@ -166,13 +154,12 @@ export function createReviewColumns({
         </button>
       ),
 
-      /** Busca no texto, no autor e no local — o admin lembra de qualquer um. */
       filterFn: (row, _columnId, value) => {
         const term = String(value).trim().toLowerCase();
         if (!term) return true;
 
-        const author = reviewAuthorsMock[row.original.autorId].nome;
-        return `${row.original.corpo} ${author} ${row.original.local.nome}`
+        const authorName = row.original.autor.nome;
+        return `${row.original.corpo} ${authorName} ${row.original.local.nome}`
           .toLowerCase()
           .includes(term);
       },
@@ -190,7 +177,7 @@ export function createReviewColumns({
     /* autor - column */
     {
       id: "autor",
-      accessorFn: (review) => reviewAuthorsMock[review.autorId].nome,
+      accessorFn: (review) => review.autor.nome,
 
       header: ({ column }) => (
         <ColumnSortFilter
@@ -201,7 +188,7 @@ export function createReviewColumns({
       ),
 
       cell: ({ row }) => {
-        const author = reviewAuthorsMock[row.original.autorId];
+        const author = row.original.autor;
 
         return (
           <div className="flex items-center gap-2.5">
@@ -259,7 +246,7 @@ export function createReviewColumns({
       ),
 
       filterFn: (row, _columnId, value) =>
-        row.original.local.id === Number(value),
+        row.original.local.id === String(value),
 
       meta: {
         visibilityDisplayName: reviewColumnsNames.local,
@@ -284,9 +271,8 @@ export function createReviewColumns({
       cell: ({ row }) => {
         const signals = signalsById.get(row.original.id) ?? [];
 
-        if (!signals.length) {
+        if (!signals.length)
           return <span className="text-muted-foreground/60">—</span>;
-        }
 
         return (
           <div className="flex flex-wrap gap-1">
@@ -391,7 +377,6 @@ export function createReviewColumns({
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-56">
-              {/* Investigar: padrão anômalo só aparece olhando o conjunto. */}
               <DropdownMenuItem onSelect={() => onFilterByAuthor(review)}>
                 <UserSearchIcon className="size-4" />
                 Ver todas deste autor
@@ -411,12 +396,7 @@ export function createReviewColumns({
 
               <DropdownMenuSeparator />
 
-              {removed ? (
-                <DropdownMenuItem onSelect={() => onRestore(review)}>
-                  <RotateCcwIcon className="size-4" />
-                  Restaurar avaliação
-                </DropdownMenuItem>
-              ) : (
+              {!removed && (
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => onRemove(review)}

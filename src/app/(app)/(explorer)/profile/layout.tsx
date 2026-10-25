@@ -1,42 +1,21 @@
-import { BadgeCheckIcon, MapPinIcon } from "lucide-react";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 
-import { PageSection } from "@/components/blocks/page-section";
-import { StatCard } from "@/components/blocks/stat-card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { explorerCredential } from "@/constants/explorer-titles";
-import { isVerifiedExplorer } from "@/constants/verification";
+import {
+  MY_ACHIEVEMENTS_TAG,
+  MY_STATS_TAG,
+  MY_VERIFICATION_TAG,
+} from "@/constants/achievements";
+import { CURRENT_USER_TAG } from "@/constants/users";
+import { listMyAchievements } from "@/http/achievements/achievements";
+import { getMyStats, getMyVerificationStatus } from "@/http/activity/activity";
+import { getCurrentUser } from "@/http/users/users";
 import { getSession } from "@/lib/session";
-import { currentExplorerMock, totalContributions } from "@/mocks/community";
 
-import { ProfileTabs } from "./_components/profile-tabs";
-
-/**
- * Iniciais do avatar — duas letras quando o nome tem sobrenome.
- *
- * @param name Nome do usuário da sessão.
- * @returns Iniciais em maiúsculas.
- */
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const letters = parts.length > 1 ? [parts[0], parts.at(-1)] : [parts[0]];
-
-  return letters
-    .map((part) => part?.charAt(0).toUpperCase() ?? "")
-    .join("")
-    .slice(0, 2);
-}
+import { ProfileHeaderContent } from "./_components/profile-header-content";
+import { ProfileHeaderSkeleton } from "./_components/profile-header-skeleton";
 
 /**
- * Casca das cinco abas do perfil.
- *
- * Server Component de propósito: lê a sessão uma vez e o cabeçalho não repinta
- * ao trocar de aba. **Identidade é real** (vem do cookie assinado), contadores
- * e atividade são mock — `Visita`, `Favorita`, `Analise` e `GanhaConquista`
- * não existem no banco.
+ * Layout da área privada do perfil do explorador com streaming de Promises.
  */
 export default async function ProfileLayout({
   children,
@@ -45,65 +24,24 @@ export default async function ProfileLayout({
 }) {
   const session = await getSession();
 
-  const nome = session?.userName ?? "Explorador";
-  const explorer = currentExplorerMock;
-  const verified = isVerifiedExplorer(explorer);
+  const promises = {
+    userPromise: getCurrentUser({ next: { tags: [CURRENT_USER_TAG] } }),
+    statsPromise: getMyStats({ next: { tags: [MY_STATS_TAG] } }),
+    verificationPromise: getMyVerificationStatus({
+      next: { tags: [MY_VERIFICATION_TAG] },
+    }),
+    achievementsPromise: listMyAchievements({
+      next: { tags: [MY_ACHIEVEMENTS_TAG] },
+    }),
+  };
 
   return (
     <main className="flex flex-1 flex-col">
-      <PageSection
-        title={nome}
-        description={`${explorerCredential(explorer.conquistas)} · desde ${explorer.desde}`}
-        className="mx-auto w-full max-w-5xl gap-6"
-        actions={
-          <Button asChild variant="outline">
-            <Link href={`/community/${explorer.id}`}>Ver perfil público</Link>
-          </Button>
-        }
-        subitems={
-          <div className="mt-4 flex flex-col gap-6">
-            <div className="flex items-start gap-4">
-              <Avatar className="size-16 shrink-0">
-                <AvatarFallback>{initialsOf(nome)}</AvatarFallback>
-              </Avatar>
-
-              <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-sm">
-                  {session?.userEmail}
-                </span>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {verified && (
-                    <Badge className="bg-sky-500 text-white">
-                      <BadgeCheckIcon className="size-3" />
-                      Explorador verificado
-                    </Badge>
-                  )}
-
-                  <Badge variant="outline">
-                    <MapPinIcon className="size-3" />
-                    {explorer.bairro}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-4">
-              <StatCard
-                label="Contribuições"
-                value={totalContributions(explorer)}
-              />
-              <StatCard label="Visitas" value={explorer.visitas} />
-              <StatCard label="Avaliações" value={explorer.avaliacoes} />
-              <StatCard label="Conquistas" value={explorer.conquistas} />
-            </div>
-
-            <ProfileTabs />
-          </div>
-        }
-      >
-        {children}
-      </PageSection>
+      <Suspense fallback={<ProfileHeaderSkeleton />}>
+        <ProfileHeaderContent session={session} promises={promises}>
+          {children}
+        </ProfileHeaderContent>
+      </Suspense>
     </main>
   );
 }

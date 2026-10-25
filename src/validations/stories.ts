@@ -23,7 +23,7 @@ const generateStorySchema = z.object({
     .min(8, "Descreva o tema em pelo menos 8 caracteres")
     .max(160, "Tema muito longo — resuma em uma linha"),
   localIds: z
-    .array(z.number().int().positive())
+    .array(z.string().min(1))
     .min(MIN_PLACES, `Escolha ao menos ${MIN_PLACES} lugares`)
     .max(MAX_PLACES, `No máximo ${MAX_PLACES} lugares por pauta`),
 });
@@ -45,11 +45,61 @@ const storyDraftSchema = z.object({
 type GenerateStorySchema = z.infer<typeof generateStorySchema>;
 type StoryDraftSchema = z.infer<typeof storyDraftSchema>;
 
+/**
+ * Validação para criação e publicação de pauta editorial.
+ */
+const publishStorySchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(3, "O slug deve ter pelo menos 3 caracteres")
+    .max(120, "O slug deve ter no máximo 120 caracteres"),
+  title: z
+    .string()
+    .trim()
+    .min(5, "O título deve ter pelo menos 5 caracteres")
+    .max(140, "O título deve ter no máximo 140 caracteres"),
+  subtitle: z
+    .string()
+    .trim()
+    .min(10, "O subtítulo deve ter pelo menos 10 caracteres")
+    .max(280, "O subtítulo deve ter no máximo 280 caracteres"),
+  neighborhood: z.string().trim().max(60).optional().nullable(),
+  introText: z
+    .string()
+    .trim()
+    .min(20, "A introdução deve ter pelo menos 20 caracteres"),
+  closingText: z.string().trim().optional().nullable(),
+  publishImmediately: z.boolean().default(false),
+  places: z
+    .array(
+      z.object({
+        placeId: z.string().uuid("Identificador do local inválido"),
+        angleTitle: z
+          .string()
+          .trim()
+          .min(3, "O título do destaque do local é obrigatório")
+          .max(120, "Máximo de 120 caracteres"),
+        bodyText: z
+          .string()
+          .trim()
+          .min(20, "O texto do local deve ter pelo menos 20 caracteres"),
+        localTip: z.string().trim().max(280).optional().nullable(),
+      }),
+    )
+    .min(MIN_PLACES, `Vincule ao menos ${MIN_PLACES} locais na pauta`)
+    .max(MAX_PLACES, `No máximo ${MAX_PLACES} locais por pauta`),
+});
+
+type PublishStorySchema = z.infer<typeof publishStorySchema>;
+
 export {
   generateStorySchema,
   storyDraftSchema,
+  publishStorySchema,
   MAX_PLACES,
   MIN_PLACES,
   type GenerateStorySchema,
   type StoryDraftSchema,
+  type PublishStorySchema,
 };

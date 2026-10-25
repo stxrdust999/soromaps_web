@@ -1,6 +1,6 @@
 import { AchievementBadge } from "@/components/ui/achievement-badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ProfileAchievement } from "@/mocks/profile";
+import type { ProfileAchievement } from "@/types/profile";
 
 interface AchievementProgressCardProps {
   item: ProfileAchievement;
