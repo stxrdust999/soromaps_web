@@ -7,6 +7,7 @@ import React, { useTransition } from "react";
 import { registerAction } from "@/actions/auth";
 import { PasswordInput } from "@/components/blocks/password-input";
 import { Button } from "@/components/ui/button";
+import { FlipWords } from "@/components/ui/flip-words";
 import { Input } from "@/components/ui/input";
 import { responseToast } from "@/lib/toaster";
 
@@ -90,7 +91,17 @@ export default function RegisterPage() {
               Junte-se ao Soromaps!
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Preencha as informações abaixo para criar sua conta
+              Descubra{" "}
+              <FlipWords
+                words={[
+                  "os melhores cafés",
+                  "aquele pastel lendário",
+                  "os parques secretos",
+                  "as resenhas sinceras",
+                ]}
+                className="font-medium text-foreground px-1"
+              />{" "}
+              de Sorocaba e compartilhe seus achados.
             </p>
           </div>
 
