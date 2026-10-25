@@ -74,9 +74,9 @@ export function FeedWorkspace({ session, promises }: FeedWorkspaceProps) {
 
     return mutesResponse.data.map((muteRule) => ({
       scope: (
-        muteRule.scopeType === 1
+        muteRule.scopeType === 0
           ? "bairro"
-          : muteRule.scopeType === 0
+          : muteRule.scopeType === 1
             ? "categoria"
             : "tipo"
       ) as FeedMuteScope,
