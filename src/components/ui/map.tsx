@@ -22,8 +22,45 @@ import { cn } from "@/lib/utils";
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  light: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
 };
+
+/**
+ * Aplica customizações cromáticas e de contraste nas camadas base do MapLibre de acordo com o tema ativo.
+ */
+function applyMapThemeCustomizations(mapInstance: MapLibreGL.Map, currentTheme: Theme) {
+  if (currentTheme === "dark") {
+    if (mapInstance.getLayer("water")) mapInstance.setPaintProperty("water", "fill-color", "#163d66");
+    if (mapInstance.getLayer("waterway")) mapInstance.setPaintProperty("waterway", "line-color", "#1e4d7b");
+
+    const highContrastRoadLayers = [
+      "road_trunk_fill_noramp",
+      "road_mot_fill_noramp",
+      "road_primary_fill_noramp",
+    ];
+    for (const roadLayer of highContrastRoadLayers) {
+      if (mapInstance.getLayer(roadLayer)) mapInstance.setPaintProperty(roadLayer, "line-color", "#e58e1b");
+    }
+
+    const naturalParkLayers = [
+      "park_nature_reserve",
+      "park_national_park",
+      "landcover_wood",
+    ];
+    for (const parkLayer of naturalParkLayers) {
+      if (mapInstance.getLayer(parkLayer)) mapInstance.setPaintProperty(parkLayer, "fill-color", "#12281c");
+    }
+    return;
+  }
+
+  if (currentTheme === "light") {
+    if (mapInstance.getLayer("water")) mapInstance.setPaintProperty("water", "fill-color", "#9ac0d6");
+    if (mapInstance.getLayer("waterway")) mapInstance.setPaintProperty("waterway", "line-color", "#8fb9d4");
+    if (mapInstance.getLayer("park_nature_reserve")) mapInstance.setPaintProperty("park_nature_reserve", "fill-color", "#d6ebd9");
+    if (mapInstance.getLayer("park_national_park")) mapInstance.setPaintProperty("park_national_park", "fill-color", "#d6ebd9");
+    if (mapInstance.getLayer("landcover_wood")) mapInstance.setPaintProperty("landcover_wood", "fill-color", "#d8edd8");
+  }
+}
 
 type Theme = "light" | "dark";
 
@@ -189,6 +226,8 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const styleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const internalUpdateRef = useRef(false);
   const resolvedTheme = useResolvedTheme(themeProp);
+  const resolvedThemeRef = useRef(resolvedTheme);
+  resolvedThemeRef.current = resolvedTheme;
 
   const isControlled = viewport !== undefined && onViewportChange !== undefined;
 
@@ -239,12 +278,14 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       // else we have to force update every layer on setStyle change
       styleTimeoutRef.current = setTimeout(() => {
         setIsStyleLoaded(true);
-        if (projection) {
-          map.setProjection(projection);
-        }
+        if (projection) map.setProjection(projection);
+        applyMapThemeCustomizations(map, resolvedThemeRef.current);
       }, 100);
     };
-    const loadHandler = () => setIsLoaded(true);
+    const loadHandler = () => {
+      setIsLoaded(true);
+      applyMapThemeCustomizations(map, resolvedThemeRef.current);
+    };
 
     // Viewport change handler - skip if triggered by internal update
     const handleMove = () => {
