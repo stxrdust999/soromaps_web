@@ -93,13 +93,24 @@ const publishStorySchema = z.object({
 
 type PublishStorySchema = z.infer<typeof publishStorySchema>;
 
+/**
+ * Validação para edição e atualização de uma pauta editorial existente.
+ */
+const updateStorySchema = publishStorySchema.extend({
+  id: z.string().uuid("Identificador da pauta inválido"),
+});
+
+type UpdateStorySchema = z.infer<typeof updateStorySchema>;
+
 export {
   generateStorySchema,
   storyDraftSchema,
   publishStorySchema,
+  updateStorySchema,
   MAX_PLACES,
   MIN_PLACES,
   type GenerateStorySchema,
   type StoryDraftSchema,
   type PublishStorySchema,
+  type UpdateStorySchema,
 };

@@ -1,16 +1,33 @@
 "use client";
 
-import { ClockIcon, Loader2Icon, SendIcon, SparklesIcon } from "lucide-react";
+import {
+  ClockIcon,
+  Loader2Icon,
+  MapPinIcon,
+  PencilIcon,
+  SendIcon,
+  SparklesIcon,
+  Trash2Icon,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useMemo, useState } from "react";
 
-import { publishStoryAction } from "@/actions/stories";
+import { deleteStoryAction, publishStoryAction } from "@/actions/stories";
 import { PageSection } from "@/components/blocks/page-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { TracingBeam } from "@/components/ui/tracing-beam";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   getStoryBySlugResponse,
   listStoriesResponse,
@@ -36,6 +53,8 @@ export function StoryArticleContent({
 }: StoryArticleContentProps) {
   const router = useRouter();
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const storyResponse = use(promises.storyPromise);
   const storiesListResponse = use(promises.storiesListPromise);
 
@@ -78,6 +97,7 @@ export function StoryArticleContent({
         nome: stop.placeName,
         categoria: stop.category.name,
         bairro: stop.neighborhood,
+        fotoUrl: stop.coverPhotoUrl ?? null,
       })),
     };
   }, [storyResponse]);
@@ -111,11 +131,11 @@ export function StoryArticleContent({
   }
 
   async function handlePublish() {
-    if (!story) return;
+    if (!story || !story.id) return;
     setIsPublishing(true);
 
     try {
-      const response = await publishStoryAction(story.id, story.slug);
+      const response = await publishStoryAction(story.id, story.slug ?? slug);
       if (!response.success) {
         responseToast.error({
           title: "Erro ao publicar pauta",
@@ -132,6 +152,32 @@ export function StoryArticleContent({
       router.refresh();
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!story?.id) return;
+    setIsDeleting(true);
+
+    try {
+      const response = await deleteStoryAction(story.id, story.slug);
+      if (!response.success) {
+        responseToast.error({
+          title: "Erro ao excluir pauta",
+          description: response.message,
+        });
+        return;
+      }
+
+      setIsDeleteDialogOpen(false);
+      responseToast.success({
+        title: "Rascunho excluído!",
+        description: "A pauta editorial foi removida com sucesso.",
+      });
+
+      router.push("/community");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -161,19 +207,44 @@ export function StoryArticleContent({
               </span>
             </div>
 
-            <Button
-              size="sm"
-              onClick={handlePublish}
-              disabled={isPublishing}
-              className="shrink-0 font-medium"
-            >
-              {isPublishing ? (
-                <Loader2Icon className="size-3.5 animate-spin mr-1.5" />
-              ) : (
-                <SendIcon className="size-3.5 mr-1.5" />
-              )}
-              Publicar agora
-            </Button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="font-medium bg-background text-foreground hover:bg-muted"
+              >
+                <Link href={`/community/nova-pauta?pautaId=${story.id}`}>
+                  <PencilIcon className="size-3.5 mr-1.5" />
+                  Editar rascunho
+                </Link>
+              </Button>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsDeleteDialogOpen(true)}
+                disabled={isPublishing || isDeleting}
+                className="font-medium"
+              >
+                <Trash2Icon className="size-3.5 mr-1.5" />
+                Excluir rascunho
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={handlePublish}
+                disabled={isPublishing || isDeleting}
+                className="shrink-0 font-medium"
+              >
+                {isPublishing ? (
+                  <Loader2Icon className="size-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <SendIcon className="size-3.5 mr-1.5" />
+                )}
+                Publicar agora
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -206,82 +277,143 @@ export function StoryArticleContent({
           </div>
         }
       >
-        <p className="text-pretty text-lg text-muted-foreground leading-relaxed">
-          {story.chamada}
-        </p>
-
-        {/* body - paragraphs */}
-        <article className="flex flex-col gap-4">
-          {story.corpo.map((paragraph, index) => (
-            <p
-              key={`${paragraph.slice(0, 24)}-${index}`}
-              className="text-pretty leading-relaxed"
-            >
-              {paragraph}
+        <TracingBeam className="px-2 sm:px-6">
+          <div className="flex flex-col gap-8">
+            <p className="text-pretty text-lg text-muted-foreground leading-relaxed">
+              {story.chamada}
             </p>
-          ))}
-        </article>
 
-        {/* stops - places */}
-        <section className="flex flex-col gap-3">
-          <h2 className="font-semibold text-lg">Lugares desta pauta</h2>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            {story.locais.map((place) => (
-              <Card
-                key={place.id}
-                size="sm"
-                className="group border border-border bg-card transition-all duration-150 hover:border-primary/60 hover:bg-muted/50 hover:shadow-sm"
-              >
-                <CardContent className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 flex-col">
-                    <Link
-                      href={`/places/${place.id}`}
-                      className="truncate font-semibold text-sm transition-colors group-hover:text-primary"
-                    >
-                      {place.nome}
-                    </Link>
-                    <span className="truncate text-muted-foreground text-xs">
-                      {place.categoria} · {place.bairro}
-                    </span>
-                  </span>
-
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 transition-colors group-hover:border-primary/50 group-hover:text-primary"
-                  >
-                    <Link href={`/places/${place.id}`}>Ver local</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        {/* related - stories */}
-        {otherStories.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="font-semibold text-lg">Outras pautas</h2>
-
-            <div className="flex flex-col gap-2">
-              {otherStories.map((item) => (
-                <Link
-                  key={item.slug}
-                  href={`/pautas/${item.slug}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+            {/* body - paragraphs */}
+            <article className="flex flex-col gap-4">
+              {story.corpo.map((paragraph, index) => (
+                <p
+                  key={`${paragraph.slice(0, 24)}-${index}`}
+                  className="text-pretty leading-relaxed"
                 >
-                  <span className="truncate">{item.titulo}</span>
-                  <span className="shrink-0 text-muted-foreground text-xs">
-                    {item.tempoLeitura} min
-                  </span>
-                </Link>
+                  {paragraph}
+                </p>
               ))}
-            </div>
-          </section>
-        )}
+            </article>
+
+            {/* stops - places */}
+            <section className="flex flex-col gap-3">
+              <h2 className="font-semibold text-lg">Lugares desta pauta</h2>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {story.locais.map((place) => (
+                  <Card
+                    key={place.id}
+                    size="sm"
+                    className="group border border-border bg-card transition-all duration-150 hover:border-primary/60 hover:bg-muted/50 hover:shadow-sm"
+                  >
+                    <CardContent className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="relative size-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                          {place.fotoUrl ? (
+                            <Image
+                              src={place.fotoUrl}
+                              alt={place.nome}
+                              fill
+                              sizes="48px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex size-full items-center justify-center text-muted-foreground">
+                              <MapPinIcon className="size-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <span className="flex min-w-0 flex-col">
+                          <Link
+                            href={`/places/${place.id}`}
+                            className="truncate font-semibold text-sm transition-colors group-hover:text-primary"
+                          >
+                            {place.nome}
+                          </Link>
+                          <span className="truncate text-muted-foreground text-xs">
+                            {place.categoria} · {place.bairro}
+                          </span>
+                        </span>
+                      </div>
+
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 transition-colors group-hover:border-primary/50 group-hover:text-primary"
+                      >
+                        <Link href={`/places/${place.id}`}>Ver local</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+
+            {/* related - stories */}
+            {otherStories.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <h2 className="font-semibold text-lg">Outras pautas</h2>
+
+                <div className="flex flex-col gap-2">
+                  {otherStories.map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/pautas/${item.slug}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <span className="truncate">{item.titulo}</span>
+                      <span className="shrink-0 text-muted-foreground text-xs">
+                        {item.tempoLeitura} min
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </TracingBeam>
       </PageSection>
+
+      {/* delete - confirmation dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setIsDeleteDialogOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir rascunho de pauta</DialogTitle>
+            <DialogDescription>
+              Tem certeza de que deseja excluir o rascunho da pauta &ldquo;{story.titulo}&rdquo;? Esta ação é definitiva e removerá a pauta da curadoria editorial.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2Icon className="size-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Trash2Icon className="size-3.5 mr-1.5" />
+              )}
+              Excluir definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

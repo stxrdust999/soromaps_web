@@ -21,7 +21,6 @@ import { mapFeedItemDtoToView } from "@/utils/mappers/feed-mapper";
 import { ContributionRanking } from "./contribution-ranking";
 import { ExplorerCard } from "./explorer-card";
 import { RecentAchievements } from "./recent-achievements";
-import { StoryGeneratorDialog } from "./story-generator-dialog";
 import { StoryShowcase } from "./story-showcase";
 import { VerificationCard } from "./verification-card";
 
@@ -160,15 +159,12 @@ export function CommunityWorkspace({
         className="gap-6"
         actions={
           isAdmin ? (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" asChild>
-                <Link href="/community/nova-pauta">
-                  <SparklesIcon />
-                  Gerar pauta (tela)
-                </Link>
-              </Button>
-              <StoryGeneratorDialog />
-            </div>
+            <Button asChild>
+              <Link href="/community/nova-pauta">
+                <SparklesIcon className="size-4 mr-1.5" />
+                Nova pauta
+              </Link>
+            </Button>
           ) : undefined
         }
         subitems={

@@ -22,6 +22,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -30,10 +31,12 @@ import {
   generateStoryDraftAction,
   type PlaceStoryItem,
   searchPlacesForStoryAction,
+  updateStoryAction,
 } from "@/actions/stories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Sparkles } from "@/components/ui/sparkles";
 import {
   Form,
   FormControl,
@@ -46,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import type { StoryDetailDto } from "@/http/api.schemas";
 import { responseToast } from "@/lib/toaster";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/utils/formatters/slugify";
@@ -69,39 +73,123 @@ interface StoryPlaceDraftInput {
 
 interface StoryEditorWorkspaceProps {
   authorName: string;
+  initialStory?: StoryDetailDto | null;
 }
 
 /**
  * Workspace de tela cheia para criação e preview em tempo real de pautas editoriais.
  */
-export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) {
+export function StoryEditorWorkspace({
+  authorName,
+  initialStory,
+}: StoryEditorWorkspaceProps) {
   const router = useRouter();
+  const isEditing = Boolean(initialStory?.id);
 
-  const [modelo, setModelo] = useState<string | null>(null);
+  const [modelo, setModelo] = useState<string | null>(
+    initialStory?.origin === 1 ? "Gemini" : null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceStoryItem[]>([]);
-  const [selectedPlaces, setSelectedPlaces] = useState<PlaceStoryItem[]>([]);
+  const [selectedPlaces, setSelectedPlaces] = useState<PlaceStoryItem[]>(() => {
+    if (!initialStory?.places) return [];
+    return initialStory.places.map((place) => ({
+      id: place.placeId,
+      nome: place.placeName,
+      bairro: place.neighborhood,
+      categoria: place.category.name,
+      nota: 5,
+      avaliacoes: 0,
+      fotoUrl: place.coverPhotoUrl ?? null,
+      sobre: place.bodyText,
+    }));
+  });
   const [isSearching, setIsSearching] = useState(false);
 
   // Campos do formulário editorial
-  const [slug, setSlug] = useState("");
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [introText, setIntroText] = useState("");
-  const [closingText, setClosingText] = useState("");
-  const [placesContent, setPlacesContent] = useState<StoryPlaceDraftInput[]>([]);
+  const [slug, setSlug] = useState(initialStory?.slug ?? "");
+  const [title, setTitle] = useState(initialStory?.title ?? "");
+  const [subtitle, setSubtitle] = useState(initialStory?.subtitle ?? "");
+  const [neighborhood, setNeighborhood] = useState(
+    initialStory?.neighborhood ?? "",
+  );
+  const [introText, setIntroText] = useState(initialStory?.introText ?? "");
+  const [closingText, setClosingText] = useState(
+    initialStory?.closingText ?? "",
+  );
+  const [placesContent, setPlacesContent] = useState<StoryPlaceDraftInput[]>(
+    () => {
+      if (!initialStory?.places) return [];
+      return initialStory.places.map((place) => ({
+        placeId: place.placeId,
+        placeName: place.placeName,
+        categoryName: place.category.name,
+        neighborhood: place.neighborhood,
+        coverPhotoUrl: place.coverPhotoUrl ?? null,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? "",
+      }));
+    },
+  );
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
   const form = useForm<GenerateStorySchema>({
     resolver: zodResolver(generateStorySchema),
-    defaultValues: { tema: "", localIds: [] },
+    defaultValues: {
+      tema: initialStory?.title ?? "",
+      localIds: initialStory?.places.map((place) => place.placeId) ?? [],
+    },
   });
 
   const { isSubmitting: isGenerating } = form.formState;
   const selectedIds = form.watch("localIds");
+
+  useEffect(() => {
+    if (!initialStory) return;
+
+    setTitle(initialStory.title);
+    setSlug(initialStory.slug);
+    setSubtitle(initialStory.subtitle);
+    setNeighborhood(initialStory.neighborhood ?? "");
+    setIntroText(initialStory.introText);
+    setClosingText(initialStory.closingText ?? "");
+    setModelo(initialStory.origin === 1 ? "Gemini" : null);
+
+    const nextPlaces: PlaceStoryItem[] = initialStory.places.map((place) => ({
+      id: place.placeId,
+      nome: place.placeName,
+      bairro: place.neighborhood,
+      categoria: place.category.name,
+      nota: 5,
+      avaliacoes: 0,
+      fotoUrl: place.coverPhotoUrl ?? null,
+      sobre: place.bodyText,
+    }));
+    setSelectedPlaces(nextPlaces);
+
+    const nextContent: StoryPlaceDraftInput[] = initialStory.places.map(
+      (place) => ({
+        placeId: place.placeId,
+        placeName: place.placeName,
+        categoryName: place.category.name,
+        neighborhood: place.neighborhood,
+        coverPhotoUrl: place.coverPhotoUrl ?? null,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? "",
+      }),
+    );
+    setPlacesContent(nextContent);
+
+    form.setValue(
+      "localIds",
+      initialStory.places.map((place) => place.placeId),
+    );
+    form.setValue("tema", initialStory.title);
+  }, [initialStory, form]);
 
   const loadPlaces = useCallback(async (query: string) => {
     setIsSearching(true);
@@ -254,7 +342,17 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
     else setIsSavingDraft(true);
 
     try {
-      const response = await createStoryAction({
+      const placesPayload = placesContent.map((place) => ({
+        placeId: place.placeId,
+        angleTitle: place.angleTitle.trim() || `Destaque: ${place.placeName}`,
+        bodyText:
+          place.bodyText.trim().length >= 20
+            ? place.bodyText.trim()
+            : `Espaço especial da comunidade: ${place.placeName}. Local imperdível para conhecer.`,
+        localTip: place.localTip.trim() || null,
+      }));
+
+      const basePayload = {
         slug: generatedSlug,
         title: title.trim(),
         subtitle: subtitle.trim() || title.trim(),
@@ -262,27 +360,26 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
         introText: introText.trim(),
         closingText: closingText.trim() || null,
         publishImmediately,
-        places: placesContent.map((place) => ({
-          placeId: place.placeId,
-          angleTitle: place.angleTitle.trim() || `Destaque: ${place.placeName}`,
-          bodyText:
-            place.bodyText.trim().length >= 20
-              ? place.bodyText.trim()
-              : `Espaço especial da comunidade: ${place.placeName}. Local imperdível para conhecer.`,
-          localTip: place.localTip.trim() || null,
-        })),
-      });
+        places: placesPayload,
+      };
+
+      const response =
+        isEditing && initialStory?.id
+          ? await updateStoryAction({ id: initialStory.id, ...basePayload })
+          : await createStoryAction(basePayload);
 
       if (!response.success) {
         responseToast.error({
-          title: "Erro ao salvar pauta",
+          title: isEditing ? "Erro ao atualizar pauta" : "Erro ao salvar pauta",
           description: response.message,
         });
         return;
       }
 
       responseToast.success({
-        title: publishImmediately ? "Pauta publicada!" : "Rascunho salvo!",
+        title: publishImmediately
+          ? (isEditing ? "Pauta atualizada e publicada!" : "Pauta publicada!")
+          : (isEditing ? "Rascunho atualizado!" : "Rascunho salvo!"),
         description: response.message,
       });
 
@@ -356,9 +453,11 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
           </Button>
           <Separator orientation="vertical" className="h-4" />
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">Criador de Pauta</span>
+            <span className="font-semibold text-sm">
+              {isEditing ? "Editar Pauta" : "Criador de Pauta"}
+            </span>
             <Badge variant="outline" className="text-xs">
-              Preview em Tempo Real
+              {isEditing ? "Edição de Rascunho" : "Preview em Tempo Real"}
             </Badge>
           </div>
         </div>
@@ -385,7 +484,7 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
             {isSavingDraft && (
               <Loader2Icon className="size-4 animate-spin mr-1.5" />
             )}
-            Salvar Rascunho
+            {isEditing ? "Atualizar Rascunho" : "Salvar Rascunho"}
           </Button>
 
           <Button
@@ -404,7 +503,7 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
             ) : (
               <SendIcon className="size-4 mr-1.5" />
             )}
-            Publicar Pauta
+            {isEditing ? "Salvar e Publicar" : "Publicar Pauta"}
           </Button>
         </div>
       </header>
@@ -627,17 +726,28 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
                     Clique para gerar com Gemini ou escreva o texto abaixo.
                   </div>
 
-                  <Button
-                    type="submit"
-                    disabled={isGenerating || selectedIds.length < MIN_PLACES}
-                  >
-                    {isGenerating ? (
-                      <Loader2Icon className="size-4 animate-spin" />
-                    ) : (
-                      <SparklesIcon className="size-4" />
+                  <div className="relative inline-flex items-center">
+                    {isGenerating && (
+                      <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-blue-500 via-indigo-500 to-pink-500 opacity-75 blur-xs animate-pulse" />
                     )}
-                    {title ? "Regerar com IA" : "Gerar com IA"}
-                  </Button>
+                    <Button
+                      type="submit"
+                      disabled={isGenerating || selectedIds.length < MIN_PLACES}
+                      className={cn(
+                        "relative transition-all",
+                        isGenerating && "border-transparent bg-zinc-900 text-white shadow-lg shadow-indigo-500/25 dark:bg-zinc-100 dark:text-zinc-900",
+                      )}
+                    >
+                      {isGenerating ? (
+                        <Sparkles className="mr-2">
+                          <Loader2Icon className="size-4 animate-spin text-primary-foreground" />
+                        </Sparkles>
+                      ) : (
+                        <SparklesIcon className="size-4 mr-1.5" />
+                      )}
+                      {title ? "Regerar com IA" : "Gerar com IA"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </Form>
@@ -820,8 +930,74 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
         </div>
 
         {/* right column: live preview */}
-        <div className="hidden lg:flex flex-1 flex-col overflow-y-auto bg-muted/10 p-8">
-          <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="relative hidden lg:flex flex-1 flex-col overflow-y-auto bg-muted/10 p-8">
+          <AnimatePresence>
+            {(Boolean(modelo) || isGenerating) && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8 }}
+                className="pointer-events-none absolute inset-0 overflow-hidden"
+              >
+                <div
+                  className="absolute inset-0 opacity-[0.06] dark:opacity-[0.1]"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(circle at center, currentColor 1px, transparent 1px)",
+                    backgroundSize: "22px 22px",
+                  }}
+                />
+
+                <motion.div
+                  animate={{
+                    x: [0, 40, -20, 0],
+                    y: [0, -30, 20, 0],
+                    scale: [1, 1.15, 0.95, 1],
+                  }}
+                  transition={{
+                    duration: 16,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                  }}
+                  className="absolute -top-24 -left-20 size-96 rounded-full blur-3xl opacity-35 dark:opacity-25"
+                  style={{ backgroundColor: "oklch(0.74 0.16 255)" }}
+                />
+
+                <motion.div
+                  animate={{
+                    x: [0, -30, 20, 0],
+                    y: [0, 40, -20, 0],
+                    scale: [1, 0.9, 1.1, 1],
+                  }}
+                  transition={{
+                    duration: 18,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                  }}
+                  className="absolute top-1/3 -right-24 size-96 rounded-full blur-3xl opacity-30 dark:opacity-20"
+                  style={{ backgroundColor: "oklch(0.62 0.24 285)" }}
+                />
+
+                <motion.div
+                  animate={{
+                    x: [0, 25, -35, 0],
+                    y: [0, -25, 30, 0],
+                    scale: [0.95, 1.1, 1, 0.95],
+                  }}
+                  transition={{
+                    duration: 20,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                  }}
+                  className="absolute -bottom-24 left-1/4 size-96 rounded-full blur-3xl opacity-25 dark:opacity-20"
+                  style={{ backgroundColor: "oklch(0.78 0.18 330)" }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="relative z-10 mx-auto w-full max-w-2xl space-y-6">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 <EyeIcon className="size-4 text-primary" />
