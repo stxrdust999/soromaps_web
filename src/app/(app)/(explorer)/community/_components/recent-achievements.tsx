@@ -51,7 +51,10 @@ export function RecentAchievements({ items }: RecentAchievementsProps) {
 
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center gap-1.5">
-                <Avatar className="size-4">
+                <Avatar
+                  className="size-4"
+                  identifier={item.autor.id ?? item.autor.nome}
+                >
                   {item.autor.avatarUrl && (
                     <AvatarImage
                       src={item.autor.avatarUrl}

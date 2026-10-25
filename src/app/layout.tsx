@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
-import "@/styles/globals.css";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import "@/styles/globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -27,6 +28,9 @@ export const metadata: Metadata = {
   description: "Plataforma digital interativa de Sorocaba",
 };
 
+/**
+ * Layout raiz da aplicação responsável pela injeção de fontes, provedor de temas e notificações globais.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,6 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt"
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -55,14 +60,21 @@ export default function RootLayout({
       </head>
 
       <body className="min-h-full">
-        <TooltipProvider>{children}</TooltipProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange={false}
+        >
+          <TooltipProvider>{children}</TooltipProvider>
 
-        <Toaster
-          position="bottom-right"
-          richColors
-          duration={5000}
-          closeButton
-        />
+          <Toaster
+            position="bottom-right"
+            richColors
+            duration={5000}
+            closeButton
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

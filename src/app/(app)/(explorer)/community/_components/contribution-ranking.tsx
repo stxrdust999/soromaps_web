@@ -142,7 +142,10 @@ function RankingRow({ explorer, position, isMe }: RankingRowProps) {
         {position}
       </span>
 
-      <Avatar className="size-8">
+      <Avatar
+        className="size-8"
+        identifier={explorer.id ?? explorer.nome}
+      >
         {explorer.avatarUrl && (
           <AvatarImage src={explorer.avatarUrl} alt={explorer.nome} />
         )}

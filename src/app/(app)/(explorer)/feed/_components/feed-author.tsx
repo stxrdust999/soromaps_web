@@ -16,7 +16,10 @@ interface FeedAuthorAvatarProps {
  */
 export function FeedAuthorAvatar({ author, className }: FeedAuthorAvatarProps) {
   return (
-    <Avatar className={cn("size-10 shrink-0", className)}>
+    <Avatar
+      className={cn("size-10 shrink-0", className)}
+      identifier={author.id ?? author.nome}
+    >
       {author.avatarUrl && (
         <AvatarImage src={author.avatarUrl} alt={author.nome} />
       )}

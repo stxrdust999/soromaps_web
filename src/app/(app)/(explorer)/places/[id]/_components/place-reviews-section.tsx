@@ -91,7 +91,7 @@ export function PlaceReviewsSection({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         author: {
-          id: currentUserId ?? "me",
+          id: currentUserId ?? "eu",
           name: "Você",
           avatarUrl: null,
           achievementsCount: 1,
@@ -203,7 +203,7 @@ export function PlaceReviewsSection({
         createdAt: nowIso,
         updatedAt: nowIso,
         author: {
-          id: currentUserId ?? "me",
+          id: currentUserId ?? "eu",
           name: "Você",
           avatarUrl: null,
         },
@@ -349,7 +349,7 @@ export function PlaceReviewsSection({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <Avatar className="size-8">
+                    <Avatar className="size-8" identifier={author?.id ?? author?.name}>
                       <AvatarImage src={author?.avatarUrl ?? undefined} />
                       <AvatarFallback className="text-xs">
                         {initials}
@@ -452,35 +452,61 @@ export function PlaceReviewsSection({
                       </div>
                     ) : reviewComments.length > 0 ? (
                       <div className="flex flex-col gap-2">
-                        {reviewComments.map((comment) => (
-                          <div
-                            key={comment.id}
-                            className="flex items-start justify-between gap-2 rounded-md bg-background/80 p-2 text-xs"
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold text-foreground">
-                                {comment.author?.name ?? "Explorador"}
-                              </span>
-                              <p className="text-muted-foreground">
-                                {comment.content}
-                              </p>
-                            </div>
+                        {reviewComments.map((comment) => {
+                          const commentAuthor = comment.author;
+                          const commentInitials = commentAuthor?.name
+                            ? commentAuthor.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .slice(0, 2)
+                                .join("")
+                                .toUpperCase()
+                            : "EX";
 
-                            {currentUserId &&
-                              comment.author?.id === currentUserId && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-6 text-destructive"
-                                  onClick={() =>
-                                    handleDeleteComment(review.id, comment.id)
-                                  }
+                          return (
+                            <div
+                              key={comment.id}
+                              className="flex items-start justify-between gap-2 rounded-md bg-background/80 p-2 text-xs"
+                            >
+                              <div className="flex items-start gap-2 min-w-0">
+                                <Avatar
+                                  className="size-6 shrink-0"
+                                  identifier={commentAuthor?.id ?? commentAuthor?.name}
                                 >
-                                  <Trash2Icon className="size-3" />
-                                </Button>
-                              )}
-                          </div>
-                        ))}
+                                  <AvatarImage
+                                    src={commentAuthor?.avatarUrl ?? undefined}
+                                  />
+                                  <AvatarFallback className="text-[10px]">
+                                    {commentInitials}
+                                  </AvatarFallback>
+                                </Avatar>
+
+                                <div className="flex flex-col gap-0.5 min-w-0">
+                                  <span className="font-semibold text-foreground truncate">
+                                    {commentAuthor?.name ?? "Explorador"}
+                                  </span>
+                                  <p className="text-muted-foreground break-words">
+                                    {comment.content}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {currentUserId &&
+                                commentAuthor?.id === currentUserId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-6 shrink-0 text-destructive"
+                                    onClick={() =>
+                                      handleDeleteComment(review.id, comment.id)
+                                    }
+                                  >
+                                    <Trash2Icon className="size-3" />
+                                  </Button>
+                                )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">

@@ -25,7 +25,10 @@ export function ExplorerCard({ explorer }: ExplorerCardProps) {
           href={`/community/${explorer.id}`}
           className="flex items-center gap-3"
         >
-          <Avatar className="size-11 shrink-0">
+          <Avatar
+            className="size-11 shrink-0"
+            identifier={explorer.id ?? explorer.nome}
+          >
             {explorer.avatarUrl && (
               <AvatarImage src={explorer.avatarUrl} alt={explorer.nome} />
             )}

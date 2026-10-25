@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 
 export interface VerifiedCommentAuthor {
+  id?: string;
   nome: string;
   nivel: number;
   avatarUrl?: string;
@@ -45,7 +46,7 @@ export function VerifiedCommentCard({
           </blockquote>
 
           <figcaption className="flex flex-row items-center gap-3">
-            <Avatar>
+            <Avatar identifier={author.id ?? author.nome}>
               {author.avatarUrl && (
                 <AvatarImage src={author.avatarUrl} alt={author.nome} />
               )}
