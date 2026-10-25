@@ -159,7 +159,12 @@ export function ReportsWorkspace({
           orientation="horizontal"
           className="min-h-0 flex-1 border-t"
         >
-          <ResizablePanel defaultSize="26%" minSize="300px" maxSize="40%">
+          <ResizablePanel
+            defaultSize={28}
+            minSize={24}
+            maxSize={45}
+            className="min-w-[340px] min-h-[450px]"
+          >
             <ReportQueue
               reports={visible}
               selectedId={selectedId}
@@ -173,7 +178,7 @@ export function ReportsWorkspace({
 
           <ResizableHandle withHandle />
 
-          <ResizablePanel minSize="480px">
+          <ResizablePanel minSize={30} className="min-w-[480px]">
             <section className="flex h-full min-w-0 flex-col">
               {selected ? (
                 <ReportDetail

@@ -92,7 +92,24 @@ export function CategoryFormDialog({
   }, [open, category, form]);
 
   const values = form.watch();
-  const collision = findColorCollision(categories, values.cor, category?.id);
+  const [collisionColor, setCollisionColor] = useState(
+    category?.cor ?? EMPTY_FORM.cor,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setCollisionColor(category?.cor ?? EMPTY_FORM.cor);
+  }, [open, category]);
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      setCollisionColor(values.cor);
+    }, 300);
+
+    return () => clearTimeout(debounceTimer);
+  }, [values.cor]);
+
+  const collision = findColorCollision(categories, collisionColor, category?.id);
   const slug = slugify(values.nome);
 
   const icons = CATEGORY_ICON_KEYS.filter((key) =>
@@ -193,8 +210,12 @@ export function CategoryFormDialog({
                     <FormLabel>Cor da Categoria</FormLabel>
                     <FormControl>
                       <ColorPicker
+                        inline
                         value={field.value}
                         onChange={field.onChange}
+                        onChangeEnd={(confirmedHex) =>
+                          setCollisionColor(confirmedHex)
+                        }
                         presets={CATEGORY_COLORS}
                       />
                     </FormControl>

@@ -49,10 +49,7 @@ export function ColumnVisibilityFilter<TData>({
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-42 shadow-lg">
-        {/* <DropdownMenuLabel>Exibir colunas</DropdownMenuLabel>
-        <DropdownMenuSeparator /> */}
-
+      <DropdownMenuContent align="end" className="w-48 shadow-lg">
         {columns.map((column) => (
           <DropdownMenuCheckboxItem
             key={column.id}

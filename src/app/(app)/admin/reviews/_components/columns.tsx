@@ -55,6 +55,7 @@ export interface ReviewRowActions {
   onFilterByAuthor: (review: ReviewMock) => void;
   onFilterByPlace: (review: ReviewMock) => void;
   onRemove: (review: ReviewMock) => void;
+  onRestore?: (review: ReviewMock) => void;
 }
 
 interface CreateColumnsOptions extends ReviewRowActions {

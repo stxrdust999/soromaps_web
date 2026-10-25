@@ -93,10 +93,19 @@ function FilterChipShell({
 
   return (
     <div className="flex h-9 w-fit items-center rounded-md border border-input bg-background pr-0.5 pl-3 shadow-xs">
-      <div className="flex items-center gap-2 pr-3">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={isOpen ? undefined : onExpand}
+        className={cn(
+          "flex h-full items-center gap-2 pr-3 text-sm whitespace-nowrap transition-colors outline-none",
+          !isOpen && !disabled && "cursor-pointer hover:text-foreground/80",
+          disabled && "cursor-not-allowed opacity-60",
+        )}
+      >
         {icon}
-        <span className="text-sm whitespace-nowrap">{label}</span>
-      </div>
+        <span>{label}</span>
+      </button>
 
       <div
         className={cn(
