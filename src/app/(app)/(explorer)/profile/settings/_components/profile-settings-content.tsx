@@ -4,7 +4,9 @@ import {
   BellOffIcon,
   CameraIcon,
   CheckIcon,
+  KeyRoundIcon,
   Loader2Icon,
+  MailIcon,
   SaveIcon,
   ShieldIcon,
   Trash2Icon,
@@ -12,11 +14,18 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { use, useMemo, useState, useTransition } from "react";
+import { use, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { deleteFeedMuteAction } from "@/actions/feed";
-import { deleteCurrentUserAction, updateCurrentUserAction } from "@/actions/users";
+import { createPlacePhotoUploadUrlAction } from "@/actions/places";
+import {
+  changeEmailAction,
+  changePasswordAction,
+  deleteCurrentUserAction,
+  updateCurrentUserAction,
+} from "@/actions/users";
+import { ImageCropperDialog } from "@/components/blocks/image-cropper-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { listFeedMutesResponse } from "@/http/feed/feed";
-import type { getCurrentUserResponse } from "@/http/users/users";
+import { createAvatarUploadUrl, type getCurrentUserResponse } from "@/http/users/users";
 
 interface ProfileSettingsContentProps {
   promises: {
@@ -63,8 +72,85 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
   const [biography, setBiography] = useState(user?.biography ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
 
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [isPending, startTransition] = useTransition();
+  const [isEmailPending, startEmailTransition] = useTransition();
+  const [isPasswordPending, startPasswordTransition] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [selectedImageSource, setSelectedImageSource] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputReference = useRef<HTMLInputElement | null>(null);
+
+  const handleChangeEmail = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newEmail.trim()) {
+      toast.error("Informe um novo e-mail válido.");
+      return;
+    }
+    if (!emailPassword) {
+      toast.error("Informe sua senha para confirmar a troca de e-mail.");
+      return;
+    }
+
+    startEmailTransition(async () => {
+      const result = await changeEmailAction({
+        newEmail: newEmail.trim(),
+        password: emailPassword,
+      });
+
+      if (result.success) {
+        toast.success(result.message);
+        setNewEmail("");
+        setEmailPassword("");
+        router.refresh();
+        return;
+      }
+
+      toast.error(result.message);
+    });
+  };
+
+  const handleChangePassword = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!currentPassword) {
+      toast.error("Informe sua senha atual.");
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      toast.error("A nova senha deve ter no mínimo 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas não coincidem.");
+      return;
+    }
+
+    startPasswordTransition(async () => {
+      const result = await changePasswordAction({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (result.success) {
+        toast.success(result.message);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        return;
+      }
+
+      toast.error(result.message);
+    });
+  };
 
   const handleSaveProfile = (event: React.FormEvent) => {
     event.preventDefault();
@@ -90,7 +176,90 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
     });
   };
 
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Por favor, selecione um arquivo de imagem válido.");
+      return;
+    }
+
+    const fileReader = new FileReader();
+    fileReader.onload = () => {
+      setSelectedImageSource(fileReader.result as string);
+      setCropperOpen(true);
+    };
+    fileReader.readAsDataURL(file);
+
+    event.target.value = "";
+  };
+
+  const handleCropComplete = async (croppedFile: File, croppedPreviewUrl: string) => {
+    setIsUploadingAvatar(true);
+
+    try {
+      const avatarUploadResponse = await createAvatarUploadUrl({
+        fileExtension: "jpg",
+      });
+
+      if (avatarUploadResponse.status === 200 && avatarUploadResponse.data?.uploadUrl) {
+        const uploadResponse = await fetch(avatarUploadResponse.data.uploadUrl, {
+          method: "PUT",
+          body: croppedFile,
+          headers: {
+            "Content-Type": "image/jpeg",
+          },
+        });
+
+        if (uploadResponse.ok) {
+          const publicUrl = avatarUploadResponse.data.publicUrl;
+          setAvatarUrl(publicUrl);
+          setCropperOpen(false);
+          setSelectedImageSource(null);
+          toast.success("Foto de perfil enviada com sucesso.");
+          return;
+        }
+      }
+
+      const uploadFallbackResult = await createPlacePhotoUploadUrlAction("profile", "jpg");
+      if (uploadFallbackResult.success && uploadFallbackResult.data?.uploadUrl) {
+        const fallbackResponse = await fetch(uploadFallbackResult.data.uploadUrl, {
+          method: "PUT",
+          body: croppedFile,
+          headers: {
+            "Content-Type": "image/jpeg",
+          },
+        });
+
+        if (fallbackResponse.ok) {
+          const fallbackPublicUrl = uploadFallbackResult.data.publicUrl;
+          setAvatarUrl(fallbackPublicUrl);
+          setCropperOpen(false);
+          setSelectedImageSource(null);
+          toast.success("Foto de perfil enviada com sucesso.");
+          return;
+        }
+      }
+
+      setAvatarUrl(croppedPreviewUrl);
+      setCropperOpen(false);
+      setSelectedImageSource(null);
+      toast.success("Foto de perfil atualizada temporariamente.");
+    } catch (error) {
+      console.error("Falha ao enviar foto de perfil:", error);
+      toast.error("Não foi possível enviar a foto recortada.");
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
+    if (deleteConfirmationText.trim().toUpperCase() !== "EXCLUIR") {
+      toast.error("Digite EXCLUIR para confirmar a exclusão da conta.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await deleteCurrentUserAction();
       if (result.success) {
@@ -142,23 +311,59 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaveProfile} className="flex flex-col gap-6 max-w-lg">
+                {/* avatar - field */}
                 <div className="flex items-center gap-5">
-                  <Avatar className="size-20 border-2 border-border shadow-sm">
-                    <AvatarImage src={avatarUrl || undefined} alt={user.name} />
-                    <AvatarFallback className="text-xl font-bold">
-                      {user.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative group">
+                    <Avatar className="size-20 border-2 border-border shadow-sm">
+                      <AvatarImage src={avatarUrl || undefined} alt={user.name} className="object-cover" />
+                      <AvatarFallback className="text-xl font-bold">
+                        {user.name.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
 
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <Label htmlFor="avatar-url">URL da Foto de Perfil</Label>
-                    <Input
-                      id="avatar-url"
-                      value={avatarUrl}
-                      onChange={(e) => setAvatarUrl(e.target.value)}
-                      placeholder="https://exemplo.com/minha-foto.jpg"
-                      className="text-xs font-mono"
+                    <label
+                      htmlFor="avatar-file-upload"
+                      className="absolute bottom-0 right-0 flex size-7 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-110 active:scale-95 disabled:pointer-events-none disabled:opacity-50"
+                      title="Alterar foto de perfil"
+                    >
+                      {isUploadingAvatar ? (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      ) : (
+                        <CameraIcon className="size-3.5" />
+                      )}
+                      <span className="sr-only">Alterar foto de perfil</span>
+                    </label>
+
+                    <input
+                      id="avatar-file-upload"
+                      type="file"
+                      ref={fileInputReference}
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleFileSelected}
+                      disabled={isUploadingAvatar}
                     />
+                  </div>
+
+                  <div className="flex flex-1 flex-col gap-1">
+                    <Label htmlFor="avatar-file-upload" className="font-medium text-sm">
+                      Foto de perfil
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Formatos JPG, PNG ou WEBP. Clique no ícone de câmera para ajustar e recortar.
+                    </p>
+                    {avatarUrl ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit h-6 px-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setAvatarUrl("")}
+                        disabled={isUploadingAvatar}
+                      >
+                        Remover foto
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -205,6 +410,7 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
         {/* Tab Conta */}
         <TabsContent value="conta" className="mt-6">
           <div className="flex flex-col gap-6">
+            {/* access-data - section */}
             <Card>
               <CardHeader>
                 <CardTitle>Dados de Acesso</CardTitle>
@@ -213,14 +419,6 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4 max-w-lg">
-                <div className="flex flex-col gap-1.5">
-                  <Label>E-mail cadastrado</Label>
-                  <Input value={user.email} disabled className="bg-muted/50" />
-                  <span className="text-xs text-muted-foreground">
-                    O e-mail é utilizado para login e notificações do sistema.
-                  </span>
-                </div>
-
                 <div className="flex flex-col gap-1.5">
                   <Label>Tipo de usuário</Label>
                   <div className="flex items-center gap-2">
@@ -233,6 +431,116 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
               </CardContent>
             </Card>
 
+            {/* change-email - section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Alteração de E-mail</CardTitle>
+                <CardDescription>
+                  Atualize o endereço de e-mail utilizado para autenticação no sistema.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleChangeEmail} className="flex flex-col gap-4 max-w-lg">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="current-email">E-mail atual</Label>
+                    <Input id="current-email" value={user.email} disabled className="bg-muted/50" />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="new-email">Novo e-mail</Label>
+                    <Input
+                      id="new-email"
+                      type="email"
+                      value={newEmail}
+                      onChange={(event) => setNewEmail(event.target.value)}
+                      placeholder="novo@exemplo.com"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="email-password">Senha de confirmação</Label>
+                    <Input
+                      id="email-password"
+                      type="password"
+                      value={emailPassword}
+                      onChange={(event) => setEmailPassword(event.target.value)}
+                      placeholder="Digite sua senha atual"
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={isEmailPending} className="w-fit gap-2">
+                    {isEmailPending ? (
+                      <Loader2Icon className="size-4 animate-spin" />
+                    ) : (
+                      <MailIcon className="size-4" />
+                    )}
+                    Atualizar e-mail
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* change-password - section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Alteração de Senha</CardTitle>
+                <CardDescription>
+                  Defina uma nova senha para manter sua conta protegida.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleChangePassword} className="flex flex-col gap-4 max-w-lg">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="current-password">Senha atual</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      placeholder="Digite sua senha atual"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="new-password">Nova senha</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="Mínimo de 8 caracteres"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="Repita a nova senha"
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={isPasswordPending} className="w-fit gap-2">
+                    {isPasswordPending ? (
+                      <Loader2Icon className="size-4 animate-spin" />
+                    ) : (
+                      <KeyRoundIcon className="size-4" />
+                    )}
+                    Atualizar senha
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* danger-zone - section */}
             <Card className="border-destructive/30">
               <CardHeader>
                 <CardTitle className="text-destructive">Zona de Perigo</CardTitle>
@@ -307,7 +615,13 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
       </Tabs>
 
       {/* Confirmação de exclusão */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(isOpen) => {
+          setDeleteDialogOpen(isOpen);
+          if (!isOpen) setDeleteConfirmationText("");
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Excluir conta definitivamente?</DialogTitle>
@@ -316,20 +630,55 @@ export function ProfileSettingsContent({ promises }: ProfileSettingsContentProps
               e seu acesso será revogado imediatamente.
             </DialogDescription>
           </DialogHeader>
+
+          {/* delete-confirmation - field */}
+          <div className="flex flex-col gap-2 py-2">
+            <Label htmlFor="delete-account-input" className="text-sm font-medium">
+              Para confirmar a exclusão, digite <span className="font-bold text-destructive">EXCLUIR</span> abaixo:
+            </Label>
+            <Input
+              id="delete-account-input"
+              value={deleteConfirmationText}
+              onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              placeholder="Digite EXCLUIR para confirmar"
+              disabled={isPending}
+              autoComplete="off"
+            />
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setDeleteConfirmationText("");
+              }}
+              disabled={isPending}
+            >
               Cancelar
             </Button>
             <Button
               variant="destructive"
               onClick={handleDeleteAccount}
-              disabled={isPending}
+              disabled={isPending || deleteConfirmationText.trim().toUpperCase() !== "EXCLUIR"}
             >
-              {isPending ? "Excluindo..." : "Sim, excluir minha conta"}
+              {isPending ? "Excluindo..." : "Confirmar exclusão"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Recorte interativo de foto de perfil */}
+      <ImageCropperDialog
+        open={cropperOpen}
+        onOpenChange={(isOpen) => {
+          setCropperOpen(isOpen);
+          if (!isOpen) setSelectedImageSource(null);
+        }}
+        imageSource={selectedImageSource}
+        onCropComplete={handleCropComplete}
+        isSubmitting={isUploadingAvatar}
+      />
     </div>
   );
 }
