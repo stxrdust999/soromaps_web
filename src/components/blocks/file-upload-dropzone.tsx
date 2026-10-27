@@ -15,7 +15,10 @@ import {
   useState,
 } from "react";
 
-import { ImageCropperDialog } from "@/components/blocks/image-cropper-dialog";
+import {
+  type CropTransformState,
+  ImageCropperDialog,
+} from "@/components/blocks/image-cropper-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +67,11 @@ export function FileUploadDropzone({
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [cropperSourceUrl, setCropperSourceUrl] = useState<string | null>(null);
   const [pendingRawFile, setPendingRawFile] = useState<File | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [savedTransform, setSavedTransform] =
+    useState<CropTransformState | null>(null);
+  const [activeInitialTransform, setActiveInitialTransform] =
+    useState<CropTransformState | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +79,9 @@ export function FileUploadDropzone({
   useEffect(() => {
     if (!value) {
       setPreviewUrl(null);
+      setOriginalFile(null);
+      setSavedTransform(null);
+      setActiveInitialTransform(null);
       return;
     }
 
@@ -103,6 +114,9 @@ export function FileUploadDropzone({
       }
 
       const temporaryUrl = URL.createObjectURL(file);
+      setOriginalFile(file);
+      setSavedTransform(null);
+      setActiveInitialTransform(null);
       setCropperSourceUrl(temporaryUrl);
       setPendingRawFile(file);
       setIsCropperOpen(true);
@@ -111,8 +125,13 @@ export function FileUploadDropzone({
   );
 
   const handleCropComplete = useCallback(
-    (croppedFile: File) => {
+    (
+      croppedFile: File,
+      _croppedPreviewUrl: string,
+      transformState: CropTransformState,
+    ) => {
       onChange(croppedFile);
+      setSavedTransform(transformState);
       setIsCropperOpen(false);
       setPendingRawFile(null);
       if (cropperSourceUrl) {
@@ -142,11 +161,13 @@ export function FileUploadDropzone({
 
   const handleOpenCropper = useCallback(() => {
     if (disabled || !value) return;
-    const temporaryUrl = URL.createObjectURL(value);
+    const sourceFile = originalFile ?? value;
+    const temporaryUrl = URL.createObjectURL(sourceFile);
+    setActiveInitialTransform(savedTransform);
     setCropperSourceUrl(temporaryUrl);
-    setPendingRawFile(value);
+    setPendingRawFile(sourceFile);
     setIsCropperOpen(true);
-  }, [disabled, value]);
+  }, [disabled, value, originalFile, savedTransform]);
 
   const handleDragOver = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -190,6 +211,9 @@ export function FileUploadDropzone({
     setValidationError(null);
     onChange(undefined);
     setPendingRawFile(null);
+    setOriginalFile(null);
+    setSavedTransform(null);
+    setActiveInitialTransform(null);
     if (cropperSourceUrl) {
       URL.revokeObjectURL(cropperSourceUrl);
       setCropperSourceUrl(null);
@@ -214,7 +238,22 @@ export function FileUploadDropzone({
       />
 
       {value ? (
-        <div className="relative group w-full h-44 aspect-video rounded-xl overflow-hidden border border-border bg-neutral-950 shadow-sm">
+        <div
+          onClick={handleOpenCropper}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              handleOpenCropper();
+            }
+          }}
+          tabIndex={disabled ? -1 : 0}
+          role="button"
+          aria-label="Editar recorte da foto selecionada"
+          className={cn(
+            "relative group w-full max-h-52 aspect-video rounded-xl overflow-hidden border border-border bg-neutral-950 shadow-sm cursor-pointer",
+            disabled && "pointer-events-none opacity-50",
+          )}
+        >
           {previewUrl ? (
             // biome-ignore lint/performance/noImgElement: Blob local para preview imediato
             <img
@@ -233,20 +272,27 @@ export function FileUploadDropzone({
             <Button
               type="button"
               variant="secondary"
-              size="icon"
-              className="size-8 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 shadow-md"
-              onClick={handleOpenCropper}
+              size="sm"
+              className="h-8 gap-1.5 rounded-full bg-black/60 hover:bg-black/80 px-3 text-xs text-white backdrop-blur-xs border border-white/20 shadow-md"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenCropper();
+              }}
               disabled={disabled}
               aria-label="Reajustar enquadramento da foto"
             >
               <PencilIcon className="size-3.5" />
+              <span>Editar recorte</span>
             </Button>
             <Button
               type="button"
               variant="secondary"
               size="icon"
               className="size-8 rounded-full bg-black/60 hover:bg-destructive text-white backdrop-blur-xs border border-white/20 shadow-md"
-              onClick={handleRemove}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleRemove();
+              }}
               disabled={disabled}
               aria-label="Remover foto"
             >
@@ -330,6 +376,7 @@ export function FileUploadDropzone({
         onOpenChange={handleCropperOpenChange}
         imageSource={cropperSourceUrl}
         onCropComplete={handleCropComplete}
+        initialTransform={activeInitialTransform}
         aspectRatio={aspectRatio}
       />
     </div>

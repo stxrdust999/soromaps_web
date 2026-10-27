@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   CheckIcon,
   CornerUpLeftIcon,
+  GlobeIcon,
   ImageOffIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -69,6 +70,25 @@ export function PointReview({
             {MODERATION_STATUS_LABEL[item.status]}
           </Badge>
         </div>
+
+        {/* external sync - banner */}
+        {item.origemSync && (
+          <div className="border-primary/30 bg-primary/5 text-foreground flex items-start gap-3 rounded-lg border p-3.5 text-sm">
+            <GlobeIcon size={18} className="text-primary mt-0.5 shrink-0" />
+
+            <div className="flex flex-col gap-0.5">
+              <p className="font-semibold">
+                Ponto capturado via sincronização externa (
+                {item.fonteSync ?? "OpenStreetMap"})
+              </p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Este local não foi enviado por um usuário da comunidade. Ele foi
+                minerado automaticamente da base pública e aguarda validação
+                cadastral antes de ir ao mapa principal.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* duplicate alert - banner */}
         {item.duplicata && (
@@ -183,7 +203,16 @@ export function PointReview({
           Aprovar
         </Button>
 
-        <Button variant="outline" onClick={onReturn}>
+        <Button
+          variant="outline"
+          onClick={onReturn}
+          disabled={Boolean(item.origemSync)}
+          title={
+            item.origemSync
+              ? "Pontos de sincronização externa não possuem autor humano para devolução"
+              : undefined
+          }
+        >
           <CornerUpLeftIcon />
           Devolver para o autor
         </Button>

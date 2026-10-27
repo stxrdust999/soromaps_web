@@ -379,107 +379,138 @@ export function ColorPicker({
     </div>
   );
 
-  const inputsElement = (
-    <div
-      className={cn(
-        "grid items-center gap-1.5",
-        inline ? "grid-cols-[76px_1fr_auto]" : "grid-cols-[82px_1fr_64px]",
-      )}
+  const modeActionElement = inline ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={handleEyeDropper}
+      title="Conta-gotas"
+      className="size-8 shrink-0 rounded-md hover:bg-muted text-muted-foreground"
     >
-      <Select
-        value={mode}
-        onValueChange={(val) => setMode(val as ColorMode)}
-      >
-        <SelectTrigger size="sm" className="h-8 rounded-xl text-xs font-medium">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="rounded-xl">
-          <SelectItem value="hex">Hex</SelectItem>
-          <SelectItem value="rgb">RGB</SelectItem>
-          <SelectItem value="hsl">HSL</SelectItem>
-        </SelectContent>
-      </Select>
+      <PipetteIcon className="size-4" />
+    </Button>
+  ) : (
+    <div className="flex h-8 w-14 shrink-0 items-center justify-center rounded-md bg-muted/60 text-xs font-medium text-muted-foreground">
+      {Math.round((hsv.a ?? 1) * 100)}%
+    </div>
+  );
 
-      {mode === "hex" && (
+  const inputsElement =
+    mode === "hex" ? (
+      <div className="flex items-center gap-1.5">
+        <Select
+          value={mode}
+          onValueChange={(selectedMode) => setMode(selectedMode as ColorMode)}
+        >
+          <SelectTrigger size="sm" className="h-8 w-18 shrink-0 text-xs font-medium">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="hex">Hex</SelectItem>
+            <SelectItem value="rgb">RGB</SelectItem>
+            <SelectItem value="hsl">HSL</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Input
           value={hexInputValue}
           onChange={(event) => setHexInputValue(event.target.value)}
           onBlur={handleHexInputBlur}
-          className="h-8 rounded-xl font-mono text-xs text-center uppercase"
+          className="h-8 min-w-0 flex-1 px-2 font-mono text-xs text-center uppercase"
           maxLength={7}
         />
-      )}
 
-      {mode === "rgb" && (
-        <div className="grid grid-cols-3 gap-1">
-          <Input
-            type="number"
-            min={0}
-            max={255}
-            value={rgb.r}
-            onChange={(event) => {
-              const val = Number.parseInt(event.target.value, 10) || 0;
-              handleRgbChange("r", val);
-            }}
-            className="h-8 rounded-lg p-0 text-center font-mono text-[11px]"
-          />
-          <Input
-            type="number"
-            min={0}
-            max={255}
-            value={rgb.g}
-            onChange={(event) => {
-              const val = Number.parseInt(event.target.value, 10) || 0;
-              handleRgbChange("g", val);
-            }}
-            className="h-8 rounded-lg p-0 text-center font-mono text-[11px]"
-          />
-          <Input
-            type="number"
-            min={0}
-            max={255}
-            value={rgb.b}
-            onChange={(event) => {
-              const val = Number.parseInt(event.target.value, 10) || 0;
-              handleRgbChange("b", val);
-            }}
-            className="h-8 rounded-lg p-0 text-center font-mono text-[11px]"
-          />
-        </div>
-      )}
+        {modeActionElement}
+      </div>
+    ) : (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <Select
+            value={mode}
+            onValueChange={(selectedMode) => setMode(selectedMode as ColorMode)}
+          >
+            <SelectTrigger size="sm" className="h-8 min-w-0 flex-1 text-xs font-medium">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hex">Hex</SelectItem>
+              <SelectItem value="rgb">RGB</SelectItem>
+              <SelectItem value="hsl">HSL</SelectItem>
+            </SelectContent>
+          </Select>
 
-      {mode === "hsl" && (
-        <div className="grid grid-cols-3 gap-1">
-          <span className="flex h-8 items-center justify-center rounded-lg bg-muted text-[11px] font-mono">
-            {hsl.h}°
-          </span>
-          <span className="flex h-8 items-center justify-center rounded-lg bg-muted text-[11px] font-mono">
-            {hsl.s}%
-          </span>
-          <span className="flex h-8 items-center justify-center rounded-lg bg-muted text-[11px] font-mono">
-            {hsl.l}%
-          </span>
+          {modeActionElement}
         </div>
-      )}
 
-      {inline ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={handleEyeDropper}
-          title="Conta-gotas"
-          className="size-8 shrink-0 rounded-lg hover:bg-muted text-muted-foreground"
-        >
-          <PipetteIcon className="size-4" />
-        </Button>
-      ) : (
-        <div className="flex h-8 items-center justify-center rounded-xl bg-muted/60 text-xs font-medium text-muted-foreground">
-          {Math.round((hsv.a ?? 1) * 100)}%
-        </div>
-      )}
-    </div>
-  );
+        {mode === "rgb" && (
+          <div className="grid grid-cols-3 gap-1.5">
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={rgb.r}
+              onChange={(event) => {
+                const channelValue = Math.min(
+                  255,
+                  Math.max(
+                    0,
+                    Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0,
+                  ),
+                );
+                handleRgbChange("r", channelValue);
+              }}
+              className="h-8 min-w-0 px-1.5 text-center font-mono text-xs tabular-nums"
+            />
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={rgb.g}
+              onChange={(event) => {
+                const channelValue = Math.min(
+                  255,
+                  Math.max(
+                    0,
+                    Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0,
+                  ),
+                );
+                handleRgbChange("g", channelValue);
+              }}
+              className="h-8 min-w-0 px-1.5 text-center font-mono text-xs tabular-nums"
+            />
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={rgb.b}
+              onChange={(event) => {
+                const channelValue = Math.min(
+                  255,
+                  Math.max(
+                    0,
+                    Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0,
+                  ),
+                );
+                handleRgbChange("b", channelValue);
+              }}
+              className="h-8 min-w-0 px-1.5 text-center font-mono text-xs tabular-nums"
+            />
+          </div>
+        )}
+
+        {mode === "hsl" && (
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="flex h-8 min-w-0 items-center justify-center rounded-md border border-input bg-muted/40 px-1.5 font-mono text-xs tabular-nums">
+              {hsl.h}°
+            </div>
+            <div className="flex h-8 min-w-0 items-center justify-center rounded-md border border-input bg-muted/40 px-1.5 font-mono text-xs tabular-nums">
+              {hsl.s}%
+            </div>
+            <div className="flex h-8 min-w-0 items-center justify-center rounded-md border border-input bg-muted/40 px-1.5 font-mono text-xs tabular-nums">
+              {hsl.l}%
+            </div>
+          </div>
+        )}
+      </div>
+    );
 
   const paletteElement = (
     <div className={cn(inline ? "pt-2" : "mt-3.5 pt-3 border-t border-border/60")}>
@@ -517,18 +548,18 @@ export function ColorPicker({
     return (
       <div
         className={cn(
-          "flex flex-row gap-4 items-start w-full rounded-2xl border border-border/70 bg-card/60 p-4 shadow-xs",
+          "flex flex-row gap-4 items-start w-full overflow-hidden rounded-xl border border-border/70 bg-card/60 p-3.5 shadow-xs",
           className,
         )}
       >
-        {/* Coluna Esquerda: Área 2D de Saturação/Brilho + sliders de Matiz (Hue) e Opacidade (Alpha) */}
-        <div className="flex flex-1 flex-col gap-3 min-w-0">
+        {/* saturationAreaAndSliders - column */}
+        <div className="flex w-36 shrink-0 flex-col gap-3">
           {saturationAreaElement}
           {hueAndAlphaSliders}
         </div>
 
-        {/* Coluna Direita: Seletor de modo (HEX/RGB/HSL), inputs numéricos, conta-gotas e paleta de cores pré-definidas (presets) */}
-        <div className="flex flex-1 flex-col gap-3 min-w-0">
+        {/* colorControlsAndPalette - column */}
+        <div className="flex flex-1 flex-col gap-2.5 min-w-0">
           {inputsElement}
           <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
             <span>Opacidade</span>

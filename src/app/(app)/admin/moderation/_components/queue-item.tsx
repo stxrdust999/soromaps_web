@@ -81,8 +81,19 @@ export function QueueItem({
             )}
           </div>
 
-          {(item.duplicata || isIncomplete(item) || item.autorNovo) && (
+          {(item.duplicata ||
+            isIncomplete(item) ||
+            item.autorNovo ||
+            item.origemSync) && (
             <div className="flex flex-wrap items-center gap-1.5">
+              {item.origemSync && (
+                <Badge
+                  variant="secondary"
+                  className="border-primary/30 bg-primary/10 text-primary"
+                >
+                  Sync externo · OSM
+                </Badge>
+              )}
               {item.duplicata && (
                 <Badge variant="warning">Possível duplicata</Badge>
               )}

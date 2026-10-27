@@ -384,9 +384,10 @@ export function AchievementFormDialog({
                 name="cor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cor</FormLabel>
+                    <FormLabel>Cor da Conquista</FormLabel>
                     <FormControl>
                       <ColorPicker
+                        inline
                         value={field.value}
                         onChange={field.onChange}
                         presets={ACHIEVEMENT_COLORS}

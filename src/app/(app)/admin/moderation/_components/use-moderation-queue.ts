@@ -55,6 +55,12 @@ export function mapDtoToItemMock(
   const diffMs = Date.now() - new Date(dto.createdAt).getTime();
   const diasNaFila = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 
+  const isExternalSync =
+    !dto.author ||
+    Boolean(dto.description?.includes("OpenStreetMap")) ||
+    Boolean(dto.about?.includes("Ponto de interesse mapeado")) ||
+    Boolean(dto.about?.includes("sincronização externa"));
+
   const enviados = Math.max(
     1,
     parseNumeric(dto.author?.totalSubmittedPlaces, 1),
@@ -70,21 +76,34 @@ export function mapDtoToItemMock(
       .join("")
       .toUpperCase() || "EX";
 
-  const autor: ModerationAuthorMock = {
-    id: dto.author?.id ?? `author-${dto.id}`,
-    nome: authorName,
-    iniciais: initials,
-    nivel: enviados >= 5 ? "Guia local" : "Explorador",
-    enviados,
-    aprovados,
-    membroDesde: dto.author?.joinedAt
-      ? new Date(dto.author.joinedAt).toLocaleDateString("pt-BR", {
-          month: "short",
-          year: "numeric",
-        })
-      : "recentemente",
-    avaliacoesEscritas,
-  };
+  const autor: ModerationAuthorMock = isExternalSync
+    ? {
+        id: dto.author?.id ?? `sync-${dto.id}`,
+        nome: "Sincronização Externa (OSM)",
+        iniciais: "OS",
+        nivel: "Integração de API Externa",
+        enviados: 0,
+        aprovados: 0,
+        membroDesde: "Sincronização automatizada",
+        avaliacoesEscritas: 0,
+        isExternalSync: true,
+        syncSource: "OpenStreetMap / Nominatim",
+      }
+    : {
+        id: dto.author?.id ?? `author-${dto.id}`,
+        nome: authorName,
+        iniciais: initials,
+        nivel: enviados >= 5 ? "Guia local" : "Explorador",
+        enviados,
+        aprovados,
+        membroDesde: dto.author?.joinedAt
+          ? new Date(dto.author.joinedAt).toLocaleDateString("pt-BR", {
+              month: "short",
+              year: "numeric",
+            })
+          : "recentemente",
+        avaliacoesEscritas,
+      };
 
   const dup =
     dto.possibleDuplicates && dto.possibleDuplicates.length > 0
@@ -126,7 +145,9 @@ export function mapDtoToItemMock(
     photoUrls: dto.photos.map((photo) => photo.url),
     status: statusStr,
     autor,
-    autorNovo: enviados <= 1,
+    autorNovo: isExternalSync ? false : enviados <= 1,
+    origemSync: isExternalSync,
+    fonteSync: isExternalSync ? "OpenStreetMap" : undefined,
     duplicata: dup,
     vizinhos: (dto.possibleDuplicates ?? []).map((_, index) => ({
       x: 0.35 + (index * 0.21) % 0.45,
@@ -149,10 +170,12 @@ export function mapDtoToItemMock(
 }
 
 /**
- * Verifica se o item na fila possui alerta (duplicata, incompleto ou autor novo).
+ * Verifica se o item na fila possui alerta (duplicata, incompleto, autor novo ou origem de sync externo).
  */
 export function hasAlert(item: ModerationItemMock): boolean {
-  return Boolean(item.duplicata || isIncomplete(item) || item.autorNovo);
+  return Boolean(
+    item.duplicata || isIncomplete(item) || item.autorNovo || item.origemSync,
+  );
 }
 
 /**

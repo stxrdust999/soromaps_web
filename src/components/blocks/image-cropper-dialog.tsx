@@ -19,11 +19,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+export interface CropTransformState {
+  zoom: number;
+  rotation: number;
+  position: { x: number; y: number };
+}
+
 interface ImageCropperDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   imageSource: string | null;
-  onCropComplete: (croppedFile: File, croppedPreviewUrl: string) => void;
+  onCropComplete: (
+    croppedFile: File,
+    croppedPreviewUrl: string,
+    transformState: CropTransformState,
+  ) => void;
+  initialTransform?: CropTransformState | null;
   isSubmitting?: boolean;
   aspectRatio?: "circle" | "landscape";
   title?: string;
@@ -53,6 +64,7 @@ export function ImageCropperDialog({
   onOpenChange,
   imageSource,
   onCropComplete,
+  initialTransform,
   isSubmitting = false,
   aspectRatio = "circle",
   title,
@@ -85,8 +97,18 @@ export function ImageCropperDialog({
   }, []);
 
   useEffect(() => {
-    if (open) resetTransformations();
-  }, [open, resetTransformations]);
+    if (!open) return;
+
+    if (initialTransform) {
+      setZoom(initialTransform.zoom);
+      setRotation(initialTransform.rotation);
+      setPosition(initialTransform.position);
+      setIsDragging(false);
+      return;
+    }
+
+    resetTransformations();
+  }, [open, initialTransform, resetTransformations]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (isSubmitting) return;
@@ -149,24 +171,28 @@ export function ImageCropperDialog({
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
 
-    /** Centraliza o ponto de rotação e translação no meio do canvas de saída */
-    context.translate(outputWidth / 2, outputHeight / 2);
+    const displayedWidth =
+      imageElement.offsetWidth || imageElement.clientWidth || cropBoxWidth;
+    const displayedHeight =
+      imageElement.offsetHeight || imageElement.clientHeight || cropBoxHeight;
+
+    const outputScaleX = outputWidth / cropBoxWidth;
+    const outputScaleY = outputHeight / cropBoxHeight;
+
+    /** Mapeia 1:1 as coordenadas visíveis na caixa do DOM para as dimensões do canvas de saída */
+    context.translate(
+      outputWidth / 2 + position.x * outputScaleX,
+      outputHeight / 2 + position.y * outputScaleY,
+    );
     context.rotate((rotation * Math.PI) / 180);
-
-    const scaleFactor = (outputWidth / cropBoxWidth) * zoom;
-    const renderedWidth = imageElement.naturalWidth * scaleFactor;
-    const renderedHeight = imageElement.naturalHeight * scaleFactor;
-
-    /** Compensação da posição relativa ao fator de escala do container */
-    const scaledPositionX = position.x * (outputWidth / cropBoxWidth);
-    const scaledPositionY = position.y * (outputHeight / cropBoxHeight);
+    context.scale(zoom * outputScaleX, zoom * outputScaleY);
 
     context.drawImage(
       imageElement,
-      -renderedWidth / 2 + scaledPositionX,
-      -renderedHeight / 2 + scaledPositionY,
-      renderedWidth,
-      renderedHeight,
+      -displayedWidth / 2,
+      -displayedHeight / 2,
+      displayedWidth,
+      displayedHeight,
     );
 
     canvas.toBlob(
@@ -178,7 +204,11 @@ export function ImageCropperDialog({
         const croppedFile = new File([blob], fileName, { type: "image/jpeg" });
         const croppedPreviewUrl = URL.createObjectURL(blob);
 
-        onCropComplete(croppedFile, croppedPreviewUrl);
+        onCropComplete(croppedFile, croppedPreviewUrl, {
+          zoom,
+          rotation,
+          position,
+        });
       },
       "image/jpeg",
       0.92,
@@ -223,11 +253,13 @@ export function ImageCropperDialog({
                 style={{
                   transform: `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg) scale(${zoom})`,
                   maxHeight: `${cropBoxHeight}px`,
+                  width: "auto",
+                  height: "auto",
                 }}
               />
             ) : null}
 
-            {/* Máscara de recorte com sombreamento perimetral e borda de destaque */}
+            {/* Máscara de recorte com sombreamento perimetral, borda de destaque e grade 3x3 */}
             {isLandscape ? (
               <>
                 <div
@@ -238,12 +270,17 @@ export function ImageCropperDialog({
                   }}
                 />
                 <div
-                  className="pointer-events-none absolute rounded-lg border border-white/20"
+                  className="pointer-events-none absolute overflow-hidden rounded-lg border border-white/20"
                   style={{
                     width: `${cropBoxWidth}px`,
                     height: `${cropBoxHeight}px`,
                   }}
-                />
+                >
+                  <div className="absolute inset-y-0 left-1/3 w-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-y-0 left-2/3 w-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-x-0 top-1/3 h-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-x-0 top-2/3 h-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                </div>
               </>
             ) : (
               <>
@@ -255,12 +292,17 @@ export function ImageCropperDialog({
                   }}
                 />
                 <div
-                  className="pointer-events-none absolute rounded-full border border-white/20"
+                  className="pointer-events-none absolute overflow-hidden rounded-full border border-white/20"
                   style={{
                     width: `${cropBoxWidth}px`,
                     height: `${cropBoxHeight}px`,
                   }}
-                />
+                >
+                  <div className="absolute inset-y-0 left-1/3 w-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-y-0 left-2/3 w-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-x-0 top-1/3 h-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                  <div className="absolute inset-x-0 top-2/3 h-px bg-white/35 shadow-[0_0_2px_rgba(0,0,0,0.4)]" />
+                </div>
               </>
             )}
           </div>

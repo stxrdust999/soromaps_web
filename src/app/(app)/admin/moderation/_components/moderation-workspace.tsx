@@ -212,10 +212,9 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
           className="min-h-0 flex-1 border-t"
         >
           <ResizablePanel
-            defaultSize={28}
-            minSize={24}
-            maxSize={45}
-            className="min-w-[340px]"
+            defaultSize="28%"
+            minSize="360px"
+            maxSize="45%"
           >
             <QueuePanel
               items={queue.visible}
@@ -235,7 +234,7 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
 
           <ResizableHandle withHandle />
 
-          <ResizablePanel minSize={30} className="min-w-[480px]">
+          <ResizablePanel minSize="480px">
             <section className="flex h-full min-w-0 flex-col">
               {selected ? (
                 <PointReview
