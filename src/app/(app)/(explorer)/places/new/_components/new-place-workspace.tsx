@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, Loader2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -41,6 +41,11 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
   const router = useRouter();
 
   const [stage, setStage] = useState<Stage>("picking");
+  const [hasVisitedForm, setHasVisitedForm] = useState(false);
+  const [isLocatingUser, setIsLocatingUser] = useState(false);
+  const [resolvedDistrict, setResolvedDistrict] = useState<string | undefined>(
+    undefined,
+  );
   const [draftCoords, setDraftCoords] = useState({
     lat: initialLat,
     lng: initialLng,
@@ -51,7 +56,9 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
 
   /** Centraliza o mapa e o pin na posição GPS atual do usuário se disponível via flyTo suave. */
   useEffect(() => {
-    if (typeof window === "undefined" || !navigator.geolocation) return;
+    if (typeof window === "undefined" || !("geolocation" in navigator)) return;
+
+    setIsLocatingUser(true);
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -60,6 +67,7 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
           lng: position.coords.longitude,
         };
         setDraftCoords(userCoords);
+        setIsLocatingUser(false);
 
         if (mapRef.current) {
           mapRef.current.flyTo({
@@ -69,7 +77,9 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
           });
         } else pendingUserCoordsRef.current = userCoords;
       },
-      () => {},
+      () => {
+        setIsLocatingUser(false);
+      },
       { enableHighAccuracy: true, timeout: 6000 },
     );
   }, []);
@@ -107,6 +117,7 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
     };
 
     setDraftCoords(targetCoords);
+    if (location.district) setResolvedDistrict(location.district);
 
     if (mapRef.current) {
       mapRef.current.flyTo({
@@ -117,12 +128,25 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
     }
   }, []);
 
+  const handleAdvanceToForm = useCallback(() => {
+    setHasVisitedForm(true);
+    setStage("form");
+  }, []);
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
       {/* address search - section */}
       {stage === "picking" && (
-        <div className="absolute top-4 left-4 right-16 z-20 max-w-sm sm:max-w-md">
+        <div className="absolute top-4 left-4 right-16 z-20 max-w-lg sm:max-w-xl md:max-w-2xl">
           <MapAddressSearch onSelectLocation={handleSelectAddress} />
+        </div>
+      )}
+
+      {/* locating user feedback - section */}
+      {isLocatingUser && (
+        <div className="pointer-events-none absolute top-16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-4 py-2 font-medium text-foreground text-xs shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+          <Loader2Icon className="size-3.5 animate-spin text-primary" />
+          <span>Buscando sua localização atual...</span>
         </div>
       )}
 
@@ -177,7 +201,7 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
             </p>
           </div>
 
-          {stage === "picking" ? (
+          {stage === "picking" && (
             <div className="flex gap-3">
               <Button
                 variant="outline"
@@ -186,18 +210,23 @@ export function NewPlaceWorkspace({ promises }: NewPlaceWorkspaceProps) {
               >
                 Cancelar
               </Button>
-              <Button className="flex-1" onClick={() => setStage("form")}>
+              <Button className="flex-1" onClick={handleAdvanceToForm}>
                 <CheckIcon className="size-4" />
                 Confirmar local
               </Button>
             </div>
-          ) : (
-            <CreateMarkerForm
-              coords={draftCoords}
-              promises={promises}
-              onChangeLocation={() => setStage("picking")}
-              onSuccess={() => router.push("/home")}
-            />
+          )}
+
+          {(stage === "form" || hasVisitedForm) && (
+            <div className={stage !== "form" ? "hidden" : undefined}>
+              <CreateMarkerForm
+                coords={draftCoords}
+                defaultDistrict={resolvedDistrict}
+                promises={promises}
+                onChangeLocation={() => setStage("picking")}
+                onSuccess={() => router.push("/home")}
+              />
+            </div>
           )}
         </Card>
       </div>

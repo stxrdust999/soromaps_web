@@ -11,6 +11,7 @@ import { listPlaces } from "@/http/places/places";
 import { HomeFeedContent } from "./_components/home-feed-content";
 import { HomeFeedSkeleton } from "./_components/home-feed-skeleton";
 import { HomeMapLayers } from "./_components/home-map-layers";
+import { HomeMapSearch } from "./_components/home-map-search";
 import { HomePanelHeader } from "./_components/home-panel-header";
 
 interface HomePageProps {
@@ -43,7 +44,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <MapDrawerLayout
-      map={<HomeMapLayers />}
+      map={
+        <>
+          <HomeMapLayers />
+          <HomeMapSearch />
+        </>
+      }
       initialViewport={initialViewport}
     >
       <HomePanelHeader />

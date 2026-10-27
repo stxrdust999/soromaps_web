@@ -1,9 +1,9 @@
 "use client";
 
-import { Loader2Icon, MapPinIcon, SearchIcon, XIcon } from "lucide-react";
+import { MapPinIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Input } from "@/components/ui/input";
+import { GooeyInput } from "@/components/ui/gooey-input";
 import { cn } from "@/lib/utils";
 
 interface PhotonFeatureGeometry {
@@ -178,45 +178,37 @@ export function MapAddressSearch({
     setIsOpen(false);
   }, []);
 
+  const expandedOffset = 48;
+  const expandedWidth = 520;
+
   return (
     <div
       ref={containerRef}
-      className={cn("relative w-full max-w-sm sm:max-w-md", className)}
+      className={cn("relative w-full max-w-lg sm:max-w-xl md:max-w-2xl", className)}
     >
-      <div className="relative flex items-center">
-        <SearchIcon className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+      {/* gooey search input - component */}
+      <GooeyInput
+        collapsedWidth={290}
+        expandedWidth={expandedWidth}
+        expandedOffset={expandedOffset}
+        placeholder="Buscar endereço ou ponto..."
+        value={searchTerm}
+        onValueChange={setSearchTerm}
+        onFocus={() => {
+          if (results.length > 0) setIsOpen(true);
+        }}
+        isLoading={isLoading}
+        onClear={handleClear}
+        surfaceClassName="bg-background/80 dark:bg-black/60 text-foreground dark:text-neutral-100 backdrop-blur-md shadow-lg border border-border/40 dark:border-white/15"
+        className="justify-start"
+      />
 
-        <Input
-          type="text"
-          value={searchTerm}
-          placeholder="Buscar endereço ou ponto em Sorocaba..."
-          className="h-10 bg-background/90 pr-16 pl-9 shadow-md backdrop-blur-md transition-all focus-visible:ring-primary"
-          onChange={(event) => setSearchTerm(event.target.value)}
-          onFocus={() => {
-            if (results.length > 0) setIsOpen(true);
-          }}
-        />
-
-        <div className="absolute right-2.5 flex items-center gap-1">
-          {isLoading && (
-            <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-          )}
-
-          {searchTerm.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClear}
-              aria-label="Limpar busca"
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
+      {/* autocomplete results dropdown - section */}
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full z-50 mt-1.5 w-full overflow-hidden rounded-lg border bg-background/95 p-1 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+        <div
+          style={{ left: expandedOffset, width: expandedWidth }}
+          className="absolute top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-border/40 dark:border-white/15 bg-background/80 dark:bg-black/75 p-1 text-foreground dark:text-neutral-100 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+        >
           <ul className="flex flex-col gap-0.5">
             {results.map((feature, index) => {
               const mainLabel = buildMainAddressLabel(feature.properties);

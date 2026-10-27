@@ -78,6 +78,7 @@ type CreateMarkerFormSchema = z.infer<typeof createMarkerFormSchema>;
 
 interface CreateMarkerFormProps {
   coords: { lat: number; lng: number };
+  defaultDistrict?: string;
   promises: {
     categoriesPromise: Promise<listCategoriesResponse>;
   };
@@ -90,6 +91,7 @@ interface CreateMarkerFormProps {
  */
 export function CreateMarkerForm({
   coords,
+  defaultDistrict,
   promises,
   onChangeLocation,
   onSuccess,
@@ -126,12 +128,17 @@ export function CreateMarkerForm({
     form.setValue("lng", coords.lng);
   }, [coords.lat, coords.lng, form]);
 
+  /** Atualiza o bairro sugerido pelo geocodificador sem desmontar o formulário. */
+  useEffect(() => {
+    if (defaultDistrict !== undefined && defaultDistrict.trim().length > 0)
+      form.setValue("bairro", defaultDistrict, { shouldValidate: true });
+  }, [defaultDistrict, form]);
+
   /** Sincroniza o valor de categoryId caso as categorias sejam carregadas após a inicialização. */
   useEffect(() => {
     const currentCategoryId = form.getValues("categoryId");
-    if (!currentCategoryId && categories.length > 0 && categories[0]?.id) {
+    if (!currentCategoryId && categories.length > 0 && categories[0]?.id)
       form.setValue("categoryId", categories[0].id, { shouldValidate: true });
-    }
   }, [categories, form]);
 
   async function onSubmitForm(data: CreateMarkerFormSchema) {
@@ -184,7 +191,7 @@ export function CreateMarkerForm({
             );
           }
         } catch {
-          // O local já foi criado; falha eventual no upload da foto não invalida o cadastro
+          /** O local já foi criado; falha eventual no upload da foto não invalida o cadastro. */
         }
       }
     }
