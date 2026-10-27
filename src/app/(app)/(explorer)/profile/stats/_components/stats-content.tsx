@@ -62,22 +62,61 @@ export function StatsContent({ promises }: StatsContentProps) {
       visitas: Number(categoryStat.count),
     }));
 
+    const visitsByMonthMap = new Map<string, number>();
+    for (const monthStat of statsData?.visitsByMonth ?? []) {
+      if (!monthStat.month)
+        continue;
+      visitsByMonthMap.set(
+        monthStat.month,
+        (visitsByMonthMap.get(monthStat.month) ?? 0) + Number(monthStat.count),
+      );
+    }
+
     const reviewsByMonthMap = new Map<string, number>();
     for (const review of reviewsItems) {
       const monthKey = review.createdAt.slice(0, 7);
+      if (!monthKey)
+        continue;
       reviewsByMonthMap.set(
         monthKey,
         (reviewsByMonthMap.get(monthKey) ?? 0) + 1,
       );
     }
 
-    const weeklyActivity: ProfileWeekActivity[] = (
-      statsData?.visitsByMonth ?? []
-    ).map((monthStat) => ({
-      semana: monthStat.month,
-      visitas: Number(monthStat.count),
-      avaliacoes: reviewsByMonthMap.get(monthStat.month) ?? 0,
-    }));
+    /**
+     * Consolida os meses de visitas e avaliações preservando períodos exclusivos de avaliação,
+     * aplicando fallback para os últimos 6 meses quando a API não retorna visitas.
+     */
+    const monthKeysSet = new Set<string>([
+      ...visitsByMonthMap.keys(),
+      ...reviewsByMonthMap.keys(),
+    ]);
+
+    if (visitsByMonthMap.size === 0) {
+      const referenceDate = new Date();
+      for (let monthOffset = 5; monthOffset >= 0; monthOffset -= 1) {
+        const monthDate = new Date(
+          Date.UTC(
+            referenceDate.getUTCFullYear(),
+            referenceDate.getUTCMonth() - monthOffset,
+            1,
+          ),
+        );
+        monthKeysSet.add(monthDate.toISOString().slice(0, 7));
+      }
+    }
+
+    const sortedMonths = Array.from(monthKeysSet).sort((first, second) =>
+      first.localeCompare(second),
+    );
+
+    const weeklyActivity: ProfileWeekActivity[] = sortedMonths.map(
+      (monthKey) => ({
+        semana: monthKey,
+        visitas: visitsByMonthMap.get(monthKey) ?? 0,
+        avaliacoes: reviewsByMonthMap.get(monthKey) ?? 0,
+      }),
+    );
 
     return {
       cobertura: coverage,

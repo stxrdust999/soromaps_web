@@ -1,9 +1,13 @@
+import type { KeyboardEvent } from "react";
+
 import { AchievementBadge } from "@/components/ui/achievement-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { ProfileAchievement } from "@/types/profile";
 
 interface AchievementProgressCardProps {
   item: ProfileAchievement;
+  onSelect?: (item: ProfileAchievement) => void;
 }
 
 /**
@@ -14,11 +18,33 @@ interface AchievementProgressCardProps {
  */
 export function AchievementProgressCard({
   item,
+  onSelect,
 }: AchievementProgressCardProps) {
   const percent = item.badge.progress ?? 0;
+  const isInteractive = Boolean(onSelect);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!onSelect)
+      return;
+    if (event.key !== "Enter" && event.key !== " ")
+      return;
+
+    event.preventDefault();
+    onSelect(item);
+  };
 
   return (
-    <Card size="sm">
+    <Card
+      size="sm"
+      role={isInteractive ? "button" : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onClick={isInteractive ? () => onSelect?.(item) : undefined}
+      onKeyDown={isInteractive ? handleKeyDown : undefined}
+      className={cn(
+        isInteractive &&
+          "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30",
+      )}
+    >
       <CardContent className="flex items-center gap-4">
         <AchievementBadge
           achievement={item.badge}

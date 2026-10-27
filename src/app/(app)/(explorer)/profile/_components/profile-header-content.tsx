@@ -19,7 +19,6 @@ import type {
 import type { getCurrentUserResponse } from "@/http/users/users";
 import type { SessionUser } from "@/types/session";
 
-import { ProfileAccountSheet } from "./profile-account-sheet";
 import { ProfileTabs } from "./profile-tabs";
 
 interface ProfileHeaderContentProps {
@@ -144,23 +143,13 @@ export function ProfileHeaderContent({
       }
       className="mx-auto w-full max-w-5xl gap-6"
       actions={
-        <div className="flex items-center gap-2">
-          <ProfileAccountSheet
-            initialData={{
-              name: profileSummary.nome,
-              email: profileSummary.email,
-              neighborhood: profileSummary.neighborhood,
-              biography: profileSummary.biography,
-            }}
-          />
-          {profileSummary.userId && (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/community/${profileSummary.userId}`}>
-                Ver perfil público
-              </Link>
-            </Button>
-          )}
-        </div>
+        profileSummary.userId ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/community/${profileSummary.userId}`}>
+              Ver perfil público
+            </Link>
+          </Button>
+        ) : undefined
       }
       subitems={
         <div className="mt-4 flex flex-col gap-6">

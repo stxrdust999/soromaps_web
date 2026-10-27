@@ -1,10 +1,21 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { type KeyboardEvent, use, useMemo, useState } from "react";
 
 import { AchievementBadge } from "@/components/ui/achievement-badge";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { resolveAchievementIcon } from "@/constants/achievements";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  resolveAchievementIcon,
+  TRIGGER_LABEL,
+} from "@/constants/achievements";
 import type { listMyAchievementsResponse } from "@/http/achievements/achievements";
 import { formatVisitDate, type ProfileAchievement } from "@/types/profile";
 
@@ -18,9 +29,12 @@ interface AchievementsContentProps {
 
 /**
  * Galeria de conquistas desbloqueadas e em progresso do explorador via React.use() + useMemo().
+ * Permite inspecionar o progresso detalhado e critério de desbloqueio em modal informativo.
  */
 export function AchievementsContent({ promises }: AchievementsContentProps) {
   const achievementsResponse = use(promises.achievementsPromise);
+  const [selectedProgressItem, setSelectedProgressItem] =
+    useState<ProfileAchievement | null>(null);
 
   const { desbloqueadas, emProgresso } = useMemo(() => {
     const items =
@@ -35,7 +49,7 @@ export function AchievementsContent({ promises }: AchievementsContentProps) {
         descricao: item.description,
         criterio: item.description,
         atual: Number(item.currentProgress ?? item.requiredQuantity),
-        meta: Number(item.requiredQuantity),
+        meta: Math.max(1, Number(item.requiredQuantity ?? 1)),
         badge: {
           id: item.id,
           name: item.name,
@@ -87,6 +101,33 @@ export function AchievementsContent({ promises }: AchievementsContentProps) {
     };
   }, [achievementsResponse]);
 
+  const handleCardKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    achievementItem: ProfileAchievement,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ")
+      return;
+
+    event.preventDefault();
+    setSelectedProgressItem(achievementItem);
+  };
+
+  const selectedPercentage = selectedProgressItem
+    ? Math.min(
+        100,
+        Math.round(
+          (selectedProgressItem.atual / Math.max(1, selectedProgressItem.meta)) *
+            100,
+        ),
+      )
+    : 0;
+
+  const remainingSteps = selectedProgressItem
+    ? Math.max(0, selectedProgressItem.meta - selectedProgressItem.atual)
+    : 0;
+
+  const isSelectedUnlocked = Boolean(selectedProgressItem?.badge.achievedAt);
+
   return (
     <div className="flex flex-col gap-8">
       {/* unlocked achievements - section */}
@@ -103,7 +144,15 @@ export function AchievementsContent({ promises }: AchievementsContentProps) {
         ) : (
           <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {desbloqueadas.map((item) => (
-              <Card key={item.badge.id} size="sm">
+              <Card
+                key={item.badge.id}
+                size="sm"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedProgressItem(item)}
+                onKeyDown={(event) => handleCardKeyDown(event, item)}
+                className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+              >
                 <CardContent className="flex flex-col items-center gap-2 text-center">
                   <AchievementBadge achievement={item.badge} badgeSize="xl" />
 
@@ -136,11 +185,92 @@ export function AchievementsContent({ promises }: AchievementsContentProps) {
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
             {emProgresso.map((item) => (
-              <AchievementProgressCard key={item.badge.id} item={item} />
+              <AchievementProgressCard
+                key={item.badge.id}
+                item={item}
+                onSelect={setSelectedProgressItem}
+              />
             ))}
           </div>
         )}
       </section>
+
+      {/* achievement details - dialog */}
+      <Dialog
+        open={Boolean(selectedProgressItem)}
+        onOpenChange={(open) => {
+          if (!open)
+            setSelectedProgressItem(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {selectedProgressItem && (
+            <>
+              <DialogHeader className="items-center text-center sm:text-center">
+                <AchievementBadge
+                  achievement={selectedProgressItem.badge}
+                  badgeSize="lg"
+                  layout="icon"
+                />
+
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+                  <Badge variant="outline">
+                    {TRIGGER_LABEL[selectedProgressItem.badge.trigger].label}
+                  </Badge>
+                  <Badge
+                    variant={isSelectedUnlocked ? "default" : "secondary"}
+                  >
+                    {isSelectedUnlocked ? "Desbloqueada" : "Em progresso"}
+                  </Badge>
+                </div>
+
+                <DialogTitle className="mt-1 text-base font-semibold">
+                  {selectedProgressItem.nome}
+                </DialogTitle>
+
+                <DialogDescription>
+                  {selectedProgressItem.descricao}
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* progress breakdown - section */}
+              <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-medium text-muted-foreground">
+                    Progresso atual
+                  </span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {selectedProgressItem.atual} de {selectedProgressItem.meta} (
+                    {selectedPercentage}%)
+                  </span>
+                </div>
+
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-foreground transition-all"
+                    style={{ width: `${selectedPercentage}%` }}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1 text-xs">
+                  <span className="text-muted-foreground">
+                    <strong className="font-medium text-foreground">
+                      Critério:
+                    </strong>{" "}
+                    {selectedProgressItem.criterio}
+                  </span>
+
+                  <span className="font-medium text-muted-foreground">
+                    {isSelectedUnlocked && selectedProgressItem.badge.achievedAt
+                      ? `Conquista desbloqueada em ${formatVisitDate(selectedProgressItem.badge.achievedAt)}.`
+                      : `Faltam ${remainingSteps} etapa(s) para desbloquear esta conquista.`}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
