@@ -36,6 +36,7 @@ interface FilterChipShellProps {
   icon: ReactNode;
   label: string;
   expanded: boolean;
+  active?: boolean;
   onExpand: () => void;
   onCollapse: () => void;
 
@@ -55,13 +56,12 @@ interface FilterChipShellProps {
  * popping; `self-stretch` makes the segment dividers touch the chip's own
  * border. Collapsing is the variant's chance to clear its filter — the
  * shell only reports the click.
- *
- * @param props Label parts, expand state and callbacks, variant control.
  */
 function FilterChipShell({
   icon,
   label,
   expanded,
+  active,
   onExpand,
   onCollapse,
   expandIcon = "right",
@@ -92,7 +92,13 @@ function FilterChipShell({
   );
 
   return (
-    <div className="flex h-9 w-fit items-center rounded-md border border-input bg-background pr-0.5 pl-3 shadow-xs">
+    <div
+      className={cn(
+        "flex h-9 w-fit items-center rounded-md border border-border bg-background pr-0.5 pl-3 shadow-xs transition-colors hover:bg-muted/40 dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        active &&
+          "border-primary/40 bg-primary/5 text-foreground dark:border-primary/40 dark:bg-primary/10",
+      )}
+    >
       <button
         type="button"
         disabled={disabled}
