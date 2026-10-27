@@ -163,9 +163,14 @@ export function FeedbackDialog({ trigger }: FeedbackDialogProps) {
                   >
                     <div className="flex items-center gap-2">
                       <IconComponent
-                        className={cn("size-4", isSelected ? "" : categoryOption.iconColor)}
+                        className={cn(
+                          "size-4",
+                          isSelected ? "" : categoryOption.iconColor,
+                        )}
                       />
-                      <span className="font-semibold text-xs">{categoryOption.label}</span>
+                      <span className="font-semibold text-xs">
+                        {categoryOption.label}
+                      </span>
                     </div>
                     <span className="text-[11px] text-muted-foreground line-clamp-1">
                       {categoryOption.description}
@@ -178,7 +183,10 @@ export function FeedbackDialog({ trigger }: FeedbackDialogProps) {
 
           {/* message - field */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="feedback-message" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <Label
+              htmlFor="feedback-message"
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+            >
               Sua mensagem
             </Label>
             <Textarea
@@ -192,14 +200,18 @@ export function FeedbackDialog({ trigger }: FeedbackDialogProps) {
             />
             <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
               <span>Seja o mais específico possível.</span>
-              <span className={cn(message.length >= 950 ? "font-semibold text-destructive" : "")}>
+              <span
+                className={cn(
+                  message.length >= 950 ? "font-semibold text-destructive" : "",
+                )}
+              >
                 {message.length}/1000
               </span>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2">
           <Button
             type="button"
             variant="outline"

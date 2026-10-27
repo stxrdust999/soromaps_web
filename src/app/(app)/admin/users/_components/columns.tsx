@@ -3,7 +3,7 @@
 import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
 
 import { ColumnSortFilter } from "@/components/table/column-sort-filter";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { UserResource } from "@/types/user";
@@ -73,6 +73,10 @@ const columns: ColumnDef<UserResource>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <Avatar size="sm">
+          {row.original.avatarUrl && (
+            <AvatarImage src={row.original.avatarUrl} />
+          )}
+
           <AvatarFallback>
             {row.original.name.charAt(0).toUpperCase()}
           </AvatarFallback>

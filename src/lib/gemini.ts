@@ -63,16 +63,16 @@ export function geminiModelDisplayName(): string {
  */
 export function buildPrompt(input: StoryPromptInput): string {
   if (input.places.length > 0) {
-    return `Tema pedido pela redação: ${input.tema}
+    return `Tema pedido pela comunidade: ${input.tema}
 
-Escreva a pauta usando apenas os lugares abaixo, nesta ordem.
+Escreva a pauta editorial explorando com entusiasmo os lugares abaixo, mantendo a ordem indicada e integrando os dados fornecidos:
 
 ${input.places.join("\n\n")}`;
   }
 
-  return `Tema pedido pela redação: ${input.tema}
+  return `Tema pedido pela comunidade: ${input.tema}
 
-Redija uma matéria, crônica ou pauta editorial completa sobre Sorocaba focada no tema solicitado, sem inventar nomes de estabelecimentos reais nem tokens de lugar.`;
+Redija uma crônica ou matéria urbana envolvente, fluida e calorosa sobre a vivência em Sorocaba, totalmente finalizada e pronta para publicação direta no feed. Não elabore notas de apuração ou instruções burocráticas; entregue o texto pronto para encantar e acolher os exploradores da cidade.`;
 }
 
 /**

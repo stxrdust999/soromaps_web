@@ -758,7 +758,7 @@ export function StoryEditorWorkspace({
                     >
                       {isGenerating ? (
                         <Sparkles className="mr-2">
-                          <Loader2Icon className="size-4 animate-spin text-primary-foreground" />
+                          <Loader2Icon className="size-4 animate-spin text-current" />
                         </Sparkles>
                       ) : (
                         <SparklesIcon className="mr-1.5 size-4" />

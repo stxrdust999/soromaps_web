@@ -110,7 +110,7 @@ export function createFeedbackColumns({
 
       meta: {
         headerClassName: "w-28",
-        cellClassName: "w-28 align-top",
+        cellClassName: "w-28",
       },
     },
 
@@ -158,7 +158,7 @@ export function createFeedbackColumns({
 
       meta: {
         headerClassName: "min-w-85",
-        cellClassName: "min-w-85 align-top whitespace-normal",
+        cellClassName: "min-w-85 whitespace-normal",
       },
     },
 
@@ -220,7 +220,7 @@ export function createFeedbackColumns({
       meta: {
         visibilityDisplayName: feedbackColumnsNames.autor,
         headerClassName: "w-44",
-        cellClassName: "w-44 align-top",
+        cellClassName: "w-44",
       },
     },
 
@@ -251,7 +251,7 @@ export function createFeedbackColumns({
       meta: {
         visibilityDisplayName: feedbackColumnsNames.contexto,
         headerClassName: "w-40",
-        cellClassName: "w-40 align-top",
+        cellClassName: "w-40",
       },
     },
 
@@ -271,7 +271,7 @@ export function createFeedbackColumns({
       meta: {
         visibilityDisplayName: feedbackColumnsNames.diasRecebido,
         headerClassName: "w-32",
-        cellClassName: "w-32 align-top text-muted-foreground",
+        cellClassName: "w-32 text-muted-foreground",
       },
     },
 
@@ -300,7 +300,7 @@ export function createFeedbackColumns({
       meta: {
         visibilityDisplayName: feedbackColumnsNames.status,
         headerClassName: "w-32",
-        cellClassName: "w-32 align-top",
+        cellClassName: "w-32",
       },
     },
 
@@ -358,7 +358,7 @@ export function createFeedbackColumns({
 
       meta: {
         headerClassName: "w-20",
-        cellClassName: "w-20 pr-4 pl-2 align-top",
+        cellClassName: "w-20 pr-4 pl-2",
       },
     },
   ];
