@@ -9,6 +9,7 @@ import { getPlaceById, listPlaces } from "@/http/places/places";
 import { createStory, publishStory, updateStory } from "@/http/stories/stories";
 import { http, type HttpResponse } from "@/lib/client";
 import {
+  buildPrompt,
   type GeminiSchema,
   geminiModelDisplayName,
   generateJson,
@@ -286,22 +287,25 @@ export async function generateStoryDraftAction(
     };
   }
 
-  const factPromises = result.data.localIds.map(placeFacts);
-  const factsResolved = await Promise.all(factPromises);
-  const facts = factsResolved.filter((block): block is string => block !== null);
+  let facts: string[] = [];
 
-  if (facts.length < result.data.localIds.length) {
-    return { success: false, message: INVALID_PAYLOAD_MESSAGE, errors: null };
+  if (result.data.localIds.length > 0) {
+    const factPromises = result.data.localIds.map(placeFacts);
+    const factsResolved = await Promise.all(factPromises);
+    facts = factsResolved.filter((block): block is string => block !== null);
+
+    if (facts.length === 0) {
+      return { success: false, message: INVALID_PAYLOAD_MESSAGE, errors: null };
+    }
   }
 
   const response = await generateJson({
     system: SYSTEM_INSTRUCTION,
     schema: DRAFT_SCHEMA,
-    prompt: `Tema pedido pela redação: ${result.data.tema}
-
-Escreva a pauta usando apenas os lugares abaixo, nesta ordem.
-
-${facts.join("\n\n")}`,
+    prompt: buildPrompt({
+      tema: result.data.tema,
+      places: facts,
+    }),
   });
 
   if (!response.ok) {

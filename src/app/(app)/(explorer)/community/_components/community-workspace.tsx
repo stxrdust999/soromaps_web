@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isVerifiedExplorer } from "@/constants/verification";
 import type { getMyVerificationStatusResponse } from "@/http/activity/activity";
+import type { StorySummaryDto } from "@/http/api.schemas";
 import type { listExplorersResponse } from "@/http/community/community";
 import type { getFeedResponse } from "@/http/feed/feed";
 import type { listStoriesResponse } from "@/http/stories/stories";
@@ -37,6 +38,49 @@ interface CommunityWorkspaceProps {
 }
 
 /**
+ * Avalia se a pauta está com status publicado, suportando serialização em string camelCase ou numérica.
+ */
+function isStoryPublished(status: string | number | undefined): boolean {
+  return status === 1 || String(status).toLowerCase() === "published";
+}
+
+/**
+ * Avalia se a origem da pauta foi gerada por inteligência artificial, suportando serialização em string camelCase ou numérica.
+ */
+function isStoryAiGenerated(origin: string | number | undefined): boolean {
+  return origin === 1 || String(origin).toLowerCase() === "aigenerated";
+}
+
+/**
+ * Converte o DTO resumido de pauta retornado pela API para o modelo de visualização da vitrine.
+ */
+function mapStorySummaryToCurated(dto: StorySummaryDto): StoryView {
+  return {
+    id: dto.id,
+    slug: dto.slug,
+    chapeu: dto.neighborhood ?? "Sorocaba",
+    titulo: dto.title,
+    chamada: dto.subtitle,
+    corpo: [],
+    fotoUrl:
+      dto.coverPhotoUrl ??
+      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+    status: isStoryPublished(dto.status) ? "publicada" : "rascunho",
+    origem: isStoryAiGenerated(dto.origin) ? "ia" : "equipe",
+    tempoLeitura: 4,
+    diasAtras: Math.max(
+      0,
+      Math.floor(
+        (Date.now() - new Date(dto.createdAt).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    ),
+    locais: [],
+    locaisCount: Number(dto.placesCount ?? 0),
+  };
+}
+
+/**
  * Área principal da Comunidade integrada via Streaming SSR (`use()` + `useMemo()`).
  */
 export function CommunityWorkspace({
@@ -49,6 +93,16 @@ export function CommunityWorkspace({
   const feedResponse = use(promises.feedPromise);
 
   const [search, setSearch] = useState("");
+
+  const rawRole =
+    session?.role ??
+    // @ts-expect-error compatibilidade caso o payload venha aninhado como user.role
+    session?.user?.role;
+
+  const isAdmin =
+    typeof rawRole === "string"
+      ? rawRole.trim().toLowerCase() === "admin"
+      : rawRole === 1;
 
   const explorers = useMemo<ExplorerView[]>(() => {
     if (explorersResponse.status !== 200 || !explorersResponse.data.items)
@@ -86,30 +140,16 @@ export function CommunityWorkspace({
     if (storiesResponse.status !== 200 || !storiesResponse.data.items)
       return [];
 
-    return storiesResponse.data.items.map((story) => ({
-      id: story.id,
-      slug: story.slug,
-      chapeu: story.neighborhood ?? "Sorocaba",
-      titulo: story.title,
-      chamada: story.subtitle,
-      corpo: [],
-      fotoUrl:
-        story.coverPhotoUrl ??
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-      status: "publicada",
-      origem: story.origin === 1 ? "ia" : "equipe",
-      tempoLeitura: 4,
-      diasAtras: Math.max(
-        0,
-        Math.floor(
-          (Date.now() - new Date(story.createdAt).getTime()) /
-            (1000 * 60 * 60 * 24),
-        ),
-      ),
-      locais: [],
-      locaisCount: Number(story.placesCount ?? 0),
-    }));
-  }, [storiesResponse]);
+    const initialStories = storiesResponse.data.items.map(
+      mapStorySummaryToCurated,
+    );
+
+    if (!isAdmin) {
+      return initialStories.filter((story) => story.status === "publicada");
+    }
+
+    return initialStories;
+  }, [storiesResponse, isAdmin]);
 
   const verificationStatus = useMemo(() => {
     if (verificationResponse.status === 200) return verificationResponse.data;
@@ -140,15 +180,10 @@ export function CommunityWorkspace({
     [explorers],
   );
 
-  const rawRole =
-    session?.role ??
-    // @ts-expect-error compatibilidade caso o payload venha aninhado como user.role
-    session?.user?.role;
-
-  const isAdmin =
-    typeof rawRole === "string"
-      ? rawRole.trim().toLowerCase() === "admin"
-      : rawRole === 1;
+  const publishedStoriesCount = useMemo(
+    () => stories.filter((story) => story.status === "publicada").length,
+    [stories],
+  );
 
   return (
     <main className="flex flex-1 flex-col">
@@ -160,8 +195,8 @@ export function CommunityWorkspace({
         actions={
           isAdmin ? (
             <Button asChild>
-              <Link href="/community/nova-pauta">
-                <SparklesIcon className="size-4 mr-1.5" />
+              <Link href="/community/new-story">
+                <SparklesIcon className="mr-1.5 size-4" />
                 Nova pauta
               </Link>
             </Button>
@@ -171,7 +206,9 @@ export function CommunityWorkspace({
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge>{explorers.length} exploradores</Badge>
             <Badge variant="outline">{verifiedCount} verificados</Badge>
-            <Badge variant="outline">{stories.length} pautas publicadas</Badge>
+            <Badge variant="outline">
+              {publishedStoriesCount} pautas publicadas
+            </Badge>
           </div>
         }
       >

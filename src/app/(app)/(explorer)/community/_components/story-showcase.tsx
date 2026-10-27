@@ -48,6 +48,11 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
               <Badge className="bg-orange-500 text-white">
                 {featured.chapeu}
               </Badge>
+              {featured.status === "rascunho" && (
+                <Badge className="border-amber-400/50 bg-amber-500/90 text-white">
+                  Rascunho
+                </Badge>
+              )}
               <StoryOriginBadge story={featured} onPhoto />
             </div>
 
@@ -78,6 +83,14 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
                 <span className="font-semibold text-orange-600 text-xs uppercase tracking-wide dark:text-orange-400">
                   {story.chapeu}
                 </span>
+                {story.status === "rascunho" && (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/40 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  >
+                    Rascunho
+                  </Badge>
+                )}
                 <StoryOriginBadge story={story} />
               </div>
 
@@ -106,6 +119,9 @@ export function StoryShowcase({ stories }: StoryShowcaseProps) {
   );
 }
 
+/**
+ * Badge que indica a autoria ou revisão da pauta (Equipe ou IA revisada).
+ */
 function StoryOriginBadge({
   story,
   onPhoto = false,
