@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PET_FRIENDLY_FILTER, PLACE_VIBES } from "@/constants/places";
 import type { MarkerResource } from "@/types/marker";
+import { calculateDistanceKilometers } from "@/utils/mappers/place-mapper";
 
 import { ALL_FILTER } from "./category-chips";
 
@@ -43,6 +44,8 @@ export interface DiscoverPlace {
   details: DiscoverPlaceDetails;
 }
 
+export type UserLocationStatus = "idle" | "locating" | "granted" | "denied";
+
 function matchesVibe(
   details: DiscoverPlaceDetails,
   vibe: string | null,
@@ -76,16 +79,73 @@ function take(
 }
 
 /**
- * Gerencia filtros de categoria, vibe e busca textual sobre a lista real de locais aprovados.
+ * Gerencia filtros de categoria, vibe, busca textual e cálculo em tempo real de proximidade sobre locais aprovados.
  */
-export function useDiscover(markers: MarkerResource[]) {
+export function useDiscover(initialMarkers: MarkerResource[]) {
   const [filter, setFilter] = useState(ALL_FILTER);
   const [vibe, setVibe] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [userCoordinates, setUserCoordinates] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [isLocatingUser, setIsLocatingUser] = useState<boolean>(false);
+  const [locationStatus, setLocationStatus] =
+    useState<UserLocationStatus>("idle");
+
+  /** Solicita a posição GPS atual do navegador para recalcular distâncias reais. */
+  const requestUserLocation = useCallback(() => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      setLocationStatus("denied");
+      return;
+    }
+
+    setIsLocatingUser(true);
+    setLocationStatus("locating");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserCoordinates({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setIsLocatingUser(false);
+        setLocationStatus("granted");
+      },
+      () => {
+        setIsLocatingUser(false);
+        setLocationStatus("denied");
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "geolocation" in navigator)
+      requestUserLocation();
+  }, [requestUserLocation]);
+
+  const markersWithRealDistance = useMemo<MarkerResource[]>(
+    () =>
+      initialMarkers.map((marker) => {
+        if (!userCoordinates) return marker;
+
+        return {
+          ...marker,
+          distanceKm: calculateDistanceKilometers(
+            marker.lat,
+            marker.lng,
+            userCoordinates.lat,
+            userCoordinates.lng,
+          ),
+        };
+      }),
+    [initialMarkers, userCoordinates],
+  );
 
   const places = useMemo<DiscoverPlace[]>(
     () =>
-      markers.map((marker) => {
+      markersWithRealDistance.map((marker) => {
         const details: DiscoverPlaceDetails = {
           nome: marker.nome,
           categoria: marker.category?.name ?? "Local",
@@ -101,7 +161,7 @@ export function useDiscover(markers: MarkerResource[]) {
         };
         return { marker, details };
       }),
-    [markers],
+    [markersWithRealDistance],
   );
 
   const filtered = useMemo(() => {
@@ -203,6 +263,9 @@ export function useDiscover(markers: MarkerResource[]) {
     setSearch,
     counts,
     hasResults: filtered.length > 0,
+    isLocatingUser,
+    locationStatus,
+    requestUserLocation,
     rails: { featured, nearby, trending, topRated, hiddenGems, recent },
   };
 }

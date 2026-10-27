@@ -51,6 +51,9 @@ export function DiscoverExplorer({ promises }: DiscoverExplorerProps) {
     setSearch,
     counts,
     hasResults,
+    isLocatingUser,
+    locationStatus,
+    requestUserLocation,
     rails,
   } = useDiscover(markers);
 
@@ -126,7 +129,12 @@ export function DiscoverExplorer({ promises }: DiscoverExplorerProps) {
 
               {/* rankings - section */}
               <div className="grid gap-6 lg:grid-cols-2">
-                <NearbyList places={rails.nearby} />
+                <NearbyList
+                  places={rails.nearby}
+                  isLocatingUser={isLocatingUser}
+                  locationStatus={locationStatus}
+                  onRequestLocation={requestUserLocation}
+                />
                 <TopRatedList places={rails.topRated} />
               </div>
 
