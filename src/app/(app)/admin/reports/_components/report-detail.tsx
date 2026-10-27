@@ -31,7 +31,10 @@ interface ReportDetailProps {
   onRemove: () => void;
 }
 
-/** Painel da direita: tudo que sustenta a decisão, e a decisão em si. */
+/**
+ * Painel de detalhes do caso de denúncia agrupado com contexto do conteúdo,
+ * lista de denunciantes, histórico do autor e ações de decisão.
+ */
 export function ReportDetail({
   report,
   onDiscard,
@@ -57,6 +60,7 @@ export function ReportDetail({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto px-8 pt-6 pb-8">
+        {/* case header - section */}
         <header className="flex flex-col gap-2">
           <p className="text-muted-foreground text-sm">
             {targetLabel.label} · {targetLabel.participio}{" "}
@@ -71,6 +75,7 @@ export function ReportDetail({
           <ReportSignalBadges signals={signals} />
         </header>
 
+        {/* coordinated alert - section */}
         {coordinated && (
           <div className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-3.5 rounded-lg border p-3">
             <OctagonAlertIcon size={16} className="shrink-0" />
@@ -83,6 +88,7 @@ export function ReportDetail({
           </div>
         )}
 
+        {/* reported content - section */}
         <section className="flex flex-col gap-2.5">
           <span className="text-muted-foreground text-sm">
             Conteúdo denunciado, como o usuário vê
@@ -91,6 +97,7 @@ export function ReportDetail({
           <ReportedContent report={report} author={author} />
         </section>
 
+        {/* reporters list - section */}
         <section className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between gap-4">
             <span className="text-muted-foreground text-sm">
@@ -117,7 +124,7 @@ export function ReportDetail({
           <ul className="divide-y overflow-hidden rounded-lg border">
             {report.denunciantes.map((reporter, index) => (
               <li
-                key={reporter.nome}
+                key={`${reporter.nome}-${index}`}
                 className={cn(
                   "flex items-center gap-3 px-3.5 py-2.5",
                   index % 2 === 1 && "bg-muted/40",
@@ -141,7 +148,9 @@ export function ReportDetail({
                   >
                     {isNewAccount(reporter.diasDeConta)
                       ? `conta criada há ${reporter.diasDeConta} ${reporter.diasDeConta === 1 ? "dia" : "dias"}`
-                      : reporter.membroDesde}
+                      : reporter.membroDesde?.toLowerCase().startsWith("membro")
+                        ? reporter.membroDesde
+                        : `membro desde ${reporter.membroDesde ?? "recente"}`}
                   </p>
                 </div>
 
@@ -158,6 +167,7 @@ export function ReportDetail({
         </section>
 
         <div className="grid items-start gap-5 lg:grid-cols-2">
+          {/* author summary - section */}
           <section className="flex flex-col gap-3.5 rounded-lg border p-4">
             <span className="text-muted-foreground text-sm">
               Autor do conteúdo
@@ -201,6 +211,7 @@ export function ReportDetail({
             </dl>
           </section>
 
+          {/* aggregated reasons - section */}
           <section className="flex flex-col gap-3 rounded-lg border p-4">
             <span className="text-muted-foreground text-sm">
               Motivos agregados
@@ -240,6 +251,7 @@ export function ReportDetail({
         </div>
       </div>
 
+      {/* decision actions - section */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t px-8 py-3.5">
         <Button variant="outline" onClick={onDiscard}>
           <ShieldOffIcon />

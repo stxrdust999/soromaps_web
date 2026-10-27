@@ -82,7 +82,7 @@ export function ReportQueue({
   onClearFilters,
 }: ReportQueueProps) {
   return (
-    <section className="flex h-full flex-col border-r">
+    <section className="flex h-full flex-col">
       <div className="flex shrink-0 flex-col gap-2.5 border-b p-3.5">
         <div className="relative">
           <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
