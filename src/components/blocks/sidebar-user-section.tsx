@@ -13,6 +13,11 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { logoutAction } from "@/actions/auth";
+import {
+  AnimatedThemeToggler,
+  applyDocumentThemeClass,
+  runThemeViewTransition,
+} from "@/components/ui/animated-theme-toggler";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +71,23 @@ export function SidebarUserSection({
   const handleNavigate = (path: string) => {
     setIsOpen(false);
     router.push(path);
+  };
+
+  const handleThemeSelect = (
+    nextTheme: "light" | "dark" | "system",
+    mouseEvent: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    if (theme === nextTheme)
+      return;
+
+    runThemeViewTransition(
+      mouseEvent.currentTarget,
+      () => {
+        applyDocumentThemeClass(nextTheme);
+        setTheme(nextTheme);
+      },
+      { variant: "circle", duration: 450 },
+    );
   };
 
   return (
@@ -163,26 +185,32 @@ export function SidebarUserSection({
             </div>
           </div>
 
+          {/* appearance - section */}
           <div className="flex flex-col gap-1.5 rounded-xl border border-border/40 bg-muted/40 p-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-[11px] font-medium text-muted-foreground">
                 Aparência
               </span>
-              <span className="text-[10px] font-medium text-muted-foreground/80">
-                {isMounted
-                  ? theme === "system"
-                    ? "Sistema"
-                    : theme === "dark"
-                      ? "Escuro"
-                      : "Claro"
-                  : ""}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-medium text-muted-foreground/80">
+                  {isMounted
+                    ? theme === "system"
+                      ? "Sistema"
+                      : theme === "dark"
+                        ? "Escuro"
+                        : "Claro"
+                    : ""}
+                </span>
+                <AnimatedThemeToggler className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground" />
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-background/80 p-0.5">
               <button
                 type="button"
-                onClick={() => setTheme("light")}
+                onClick={(mouseEvent) =>
+                  handleThemeSelect("light", mouseEvent)
+                }
                 className={cn(
                   "flex h-7 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-all duration-200",
                   isMounted && theme === "light"
@@ -197,7 +225,7 @@ export function SidebarUserSection({
 
               <button
                 type="button"
-                onClick={() => setTheme("dark")}
+                onClick={(mouseEvent) => handleThemeSelect("dark", mouseEvent)}
                 className={cn(
                   "flex h-7 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-all duration-200",
                   isMounted && theme === "dark"
@@ -212,7 +240,9 @@ export function SidebarUserSection({
 
               <button
                 type="button"
-                onClick={() => setTheme("system")}
+                onClick={(mouseEvent) =>
+                  handleThemeSelect("system", mouseEvent)
+                }
                 className={cn(
                   "flex h-7 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-all duration-200",
                   isMounted && theme === "system"
@@ -237,7 +267,7 @@ export function SidebarUserSection({
               className="h-9 w-full justify-start gap-2.5 rounded-xl px-2.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground active:scale-[0.99]"
             >
               <PencilIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span>Editar perfil</span>
+              <span>Meu Perfil</span>
             </Button>
 
             <Button

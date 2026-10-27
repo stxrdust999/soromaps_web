@@ -14,17 +14,41 @@ import {
   NAV_GROUP_EXPLORER,
   NAV_GROUP_GENERAL,
 } from "@/constants/navigation";
+import { CURRENT_USER_TAG } from "@/constants/users";
+import { getCurrentUser } from "@/http/users/users";
 import { getSession } from "@/lib/session";
 import { SidebarRouteButton } from "./sidebar-route-button";
 import { SidebarUserSection } from "./sidebar-user-section";
 
+/**
+ * Barra lateral principal da aplicação autenticada.
+ * Hidrata os dados do perfil no rodapé a partir de `/api/users/me` com fallback para a sessão em cookie.
+ */
 export async function AppSidebar() {
   const session = await getSession();
+  let currentUser = null;
 
-  const name = session?.name ?? "Usuário";
-  const email = session?.email ?? "";
-  const initials = name?.charAt(0).toUpperCase() ?? "U";
-  const isAdmin = session?.role === "admin";
+  if (session) {
+    try {
+      const userResponse = await getCurrentUser({
+        next: { tags: [CURRENT_USER_TAG] },
+      });
+      if (userResponse.status === 200)
+        currentUser = userResponse.data;
+    } catch {
+      currentUser = null;
+    }
+  }
+
+  const name = currentUser?.name ?? session?.name ?? "Explorador";
+  const email = currentUser?.email ?? session?.email ?? "";
+  const initials = name.charAt(0).toUpperCase() || "E";
+  const avatarUrl = currentUser?.avatarUrl ?? session?.avatarUrl ?? undefined;
+  const role =
+    (currentUser?.role ?? session?.role)?.toLowerCase() === "admin"
+      ? "admin"
+      : "user";
+  const isAdmin = role === "admin";
 
   const navigationGroups = [
     NAV_GROUP_GENERAL,
@@ -72,7 +96,13 @@ export async function AppSidebar() {
       <SidebarSeparator className="mx-0 w-full shrink-0 bg-black/30" />
 
       <SidebarFooter className="shrink-0">
-        <SidebarUserSection userName={name} email={email} initials={initials} />
+        <SidebarUserSection
+          userName={name}
+          email={email}
+          initials={initials}
+          avatarUrl={avatarUrl}
+          role={role}
+        />
       </SidebarFooter>
     </Sidebar>
   );
