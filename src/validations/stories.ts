@@ -23,8 +23,7 @@ const generateStorySchema = z.object({
     .max(160, "Tema muito longo — resuma em uma linha"),
   localIds: z
     .array(z.string().min(1))
-    .max(MAX_PLACES, `No máximo ${MAX_PLACES} lugares por pauta`)
-    .default([]),
+    .max(MAX_PLACES, `No máximo ${MAX_PLACES} lugares por pauta`),
 });
 
 /**
