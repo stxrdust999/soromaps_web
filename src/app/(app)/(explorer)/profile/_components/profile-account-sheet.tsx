@@ -41,6 +41,7 @@ export function ProfileAccountSheet({ initialData }: ProfileAccountSheetProps) {
   const router = useRouter();
   const [open, setOpen] = useState<boolean>(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
   const [name, setName] = useState<string>(initialData.name);
@@ -83,6 +84,14 @@ export function ProfileAccountSheet({ initialData }: ProfileAccountSheetProps) {
   };
 
   const handleDeleteAccount = () => {
+    if (deleteConfirmationText.trim().toUpperCase() !== "EXCLUIR") {
+      responseToast.error({
+        title: "Confirmação necessária",
+        description: "Digite EXCLUIR para confirmar a exclusão da conta.",
+      });
+      return;
+    }
+
     startTransition(async () => {
       const state = await deleteCurrentUserAction();
 
@@ -100,6 +109,7 @@ export function ProfileAccountSheet({ initialData }: ProfileAccountSheetProps) {
       });
 
       setDeleteDialogOpen(false);
+      setDeleteConfirmationText("");
       setOpen(false);
       router.push("/login");
       router.refresh();
@@ -193,19 +203,43 @@ export function ProfileAccountSheet({ initialData }: ProfileAccountSheetProps) {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(isOpen) => {
+          setDeleteDialogOpen(isOpen);
+          if (!isOpen) setDeleteConfirmationText("");
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir conta</DialogTitle>
+            <DialogTitle>Excluir conta definitivamente?</DialogTitle>
             <DialogDescription>
               Tem certeza que deseja excluir sua conta permanentemente? Esta ação é irreversível.
             </DialogDescription>
           </DialogHeader>
 
+          {/* delete-confirmation - field */}
+          <div className="flex flex-col gap-2 py-2">
+            <Label htmlFor="delete-account-sheet-input" className="text-sm font-medium">
+              Para prosseguir, digite <span className="font-bold text-destructive">EXCLUIR</span> abaixo:
+            </Label>
+            <Input
+              id="delete-account-sheet-input"
+              value={deleteConfirmationText}
+              onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              placeholder="Digite EXCLUIR para confirmar"
+              disabled={isPending}
+              autoComplete="off"
+            />
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <Button
               variant="secondary"
-              onClick={() => setDeleteDialogOpen(false)}
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setDeleteConfirmationText("");
+              }}
               disabled={isPending}
             >
               Cancelar
@@ -213,7 +247,7 @@ export function ProfileAccountSheet({ initialData }: ProfileAccountSheetProps) {
             <Button
               variant="destructive"
               onClick={handleDeleteAccount}
-              disabled={isPending}
+              disabled={isPending || deleteConfirmationText.trim().toUpperCase() !== "EXCLUIR"}
             >
               {isPending ? "Excluindo..." : "Confirmar exclusão"}
             </Button>

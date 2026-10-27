@@ -8,6 +8,7 @@ import {
   PLACES_LIST_TAG,
   placeShowTag,
 } from "@/constants/places";
+import { ADMIN_STATS_TAG } from "@/constants/reports";
 import { getApiErrorMessage } from "@/helpers/api-error";
 import {
   batchDecidePlaceModeration,
@@ -47,6 +48,7 @@ export async function decidePlaceModerationAction(
     updateTag(MODERATION_HISTORY_TAG);
     updateTag(PLACES_LIST_TAG);
     updateTag(placeShowTag(placeId));
+    updateTag(ADMIN_STATS_TAG);
 
     return {
       success: true,
@@ -92,6 +94,7 @@ export async function batchDecideModerationAction(
     updateTag(MODERATION_HISTORY_TAG);
     updateTag(PLACES_LIST_TAG);
     placeIds.forEach((id) => updateTag(placeShowTag(id)));
+    updateTag(ADMIN_STATS_TAG);
 
     return {
       success: true,
@@ -129,6 +132,7 @@ export async function undoModerationDecisionAction(
     updateTag(MODERATION_HISTORY_TAG);
     updateTag(PLACES_LIST_TAG);
     updateTag(placeShowTag(placeId));
+    updateTag(ADMIN_STATS_TAG);
 
     return {
       success: true,

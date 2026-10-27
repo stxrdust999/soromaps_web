@@ -222,6 +222,8 @@ export function createAchievementColumns({
         );
       },
 
+      filterFn: (row, _columnId, value) => triggerOf(row.original) === value,
+
       meta: {
         visibilityDisplayName: achievementColumnsNames.gatilho,
         headerClassName: "w-36",

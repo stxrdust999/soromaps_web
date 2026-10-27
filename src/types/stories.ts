@@ -9,6 +9,7 @@ export interface StoryPlaceView {
   nome: string;
   bairro: string;
   categoria: string;
+  fotoUrl?: string | null;
 }
 
 /**

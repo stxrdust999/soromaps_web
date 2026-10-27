@@ -16,23 +16,29 @@ function buildMutes(item: FeedItemMock): FeedMute[] {
   const rules: FeedMute[] = [];
 
   if (local) {
-    rules.push({
-      scope: "bairro",
-      value: local.bairro,
-      label: `Menos do bairro ${local.bairro}`,
-    });
-    rules.push({
-      scope: "categoria",
-      value: local.categoria,
-      label: `Menos de ${local.categoria}`,
-    });
+    if (local.bairro && local.bairro.trim()) {
+      rules.push({
+        scope: "bairro",
+        value: local.bairro.trim(),
+        label: `Menos do bairro ${local.bairro.trim()}`,
+      });
+    }
+    if (local.categoria && local.categoria.trim()) {
+      rules.push({
+        scope: "categoria",
+        value: local.categoria.trim(),
+        label: `Menos de ${local.categoria.trim()}`,
+      });
+    }
   }
 
-  rules.push({
-    scope: "tipo",
-    value: item.kind,
-    label: `Menos ${FEED_KIND_LABEL[item.kind]}`,
-  });
+  if (item.kind && FEED_KIND_LABEL[item.kind]) {
+    rules.push({
+      scope: "tipo",
+      value: item.kind,
+      label: `Menos ${FEED_KIND_LABEL[item.kind]}`,
+    });
+  }
 
   return rules;
 }

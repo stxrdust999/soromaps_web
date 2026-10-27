@@ -191,31 +191,48 @@ const CarouselControl = ({
   );
 };
 
+interface CarouselDotsProps {
+  total: number;
+  current: number;
+  handleDotClick: (index: number) => void;
+}
+
 /**
- * Indicador de posição entre as duas setas. É só leitura — quem navega são as
- * setas e o clique no slide vizinho; ponto de 8px não chega perto do alvo
- * mínimo de toque, então não vira botão.
+ * Indicador de paginação interativo com formato de pill animada no slide ativo.
  */
 const CarouselDots = ({
   total,
   current,
-}: {
-  total: number;
-  current: number;
-}) => {
+  handleDotClick,
+}: CarouselDotsProps) => {
   return (
     <div
-      aria-hidden
-      className="flex h-5 items-center gap-1.5 rounded-full bg-foreground px-2"
+      role="tablist"
+      aria-label="Paginação do carrossel"
+      className="flex h-6 items-center gap-1.5 rounded-full bg-foreground px-2.5"
     >
-      {Array.from({ length: total }, (_, index) => index).map((index) => (
-        <span
-          key={index}
-          className={`size-2 rounded-full transition-colors duration-300 ${
-            index === current ? "bg-primary" : "bg-background"
-          }`}
-        />
-      ))}
+      {Array.from({ length: total }, (_, index) => index).map((index) => {
+        const isCurrent = index === current;
+        return (
+          <button
+            key={index}
+            type="button"
+            role="tab"
+            aria-selected={isCurrent}
+            aria-label={`Ir para o slide ${index + 1}`}
+            onClick={() => handleDotClick(index)}
+            className="group flex h-4 items-center justify-center p-0.5 focus:outline-none"
+          >
+            <span
+              className={`h-1.5 rounded-full transition-all duration-300 ease-out ${
+                isCurrent
+                  ? "w-6 bg-primary"
+                  : "w-2 bg-background/50 group-hover:bg-background/80"
+              }`}
+            />
+          </button>
+        );
+      })}
     </div>
   );
 };
@@ -265,8 +282,19 @@ export default function Carousel({
 
   const [position, setPosition] = useState(canLoop ? total : 0);
   const [animated, setAnimated] = useState(true);
+  const [isPaused, setIsPaused] = useState(false);
 
   const current = ((position % total) + total) % total;
+
+  useEffect(() => {
+    if (!canLoop || isPaused) return;
+
+    const autoplayInterval = setInterval(() => {
+      setPosition((previousPosition) => previousPosition + 1);
+    }, 5000);
+
+    return () => clearInterval(autoplayInterval);
+  }, [canLoop, isPaused]);
 
   // Dois frames: um para o salto sem transição pintar, outro para religá-la
   useEffect(() => {
@@ -304,9 +332,18 @@ export default function Carousel({
   };
 
   const handleSlideClick = (index: number) => {
-    if (position !== index) {
-      setPosition(index);
+    if (position !== index) setPosition(index);
+  };
+
+  const handleDotClick = (targetIndex: number) => {
+    if (targetIndex === current) return;
+
+    if (canLoop) {
+      setPosition(total + targetIndex);
+      return;
     }
+
+    setPosition(targetIndex);
   };
 
   const id = useId();
@@ -316,6 +353,10 @@ export default function Carousel({
       className="relative mx-auto"
       style={{ width, height }}
       aria-labelledby={`carousel-heading-${id}`}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onFocusCapture={() => setIsPaused(true)}
+      onBlurCapture={() => setIsPaused(false)}
     >
       <ul
         className={`absolute flex ease-in-out ${
@@ -348,7 +389,11 @@ export default function Carousel({
           handleClick={handlePreviousClick}
         />
 
-        <CarouselDots total={total} current={current} />
+        <CarouselDots
+          total={total}
+          current={current}
+          handleDotClick={handleDotClick}
+        />
 
         <CarouselControl
           type="next"

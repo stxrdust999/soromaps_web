@@ -4,6 +4,10 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 import { dismissReportsAction } from "@/actions/reports";
 import { removeContentAction } from "@/actions/reviews";
+import type {
+  AdminGroupedReportItemDto,
+  ReportTargetSnapshotDto,
+} from "@/http/api.schemas";
 import type { listAdminFeedbackResponse } from "@/http/feedback/feedback";
 import type { listAdminGroupedReportsResponse } from "@/http/reports/reports";
 import type {
@@ -33,6 +37,55 @@ export interface ReportSignal {
   tone: "bad" | "warn" | "neutral";
 }
 
+/**
+ * Denunciante individual enriquecido retornado pelo endpoint de denúncias agrupadas.
+ */
+export interface EnrichedReportReporterDto {
+  name: string;
+  initials: string;
+  reason: string;
+  createdAt: string;
+  memberSince: string;
+  accountAgeDays: number;
+}
+
+/**
+ * Snapshot enriquecido do alvo denunciado com histórico do autor e metadados do conteúdo.
+ */
+export interface EnrichedReportTargetSnapshotDto
+  extends Omit<ReportTargetSnapshotDto, "targetType"> {
+  targetType?:
+    | ReportTargetSnapshotDto["targetType"]
+    | "place"
+    | "review"
+    | "comment";
+  authorTitle?: string | null;
+  authorMemberSince?: string | null;
+  authorReviewsCount?: number;
+  authorRemovedContentCount?: number;
+  placeName?: string | null;
+  neighborhood?: string | null;
+  categoryName?: string | null;
+  coordinates?: string | null;
+  rating?: number | null;
+  parentReviewContent?: string | null;
+}
+
+/**
+ * Item agrupado de denúncias enriquecido com denunciantes reais e suporte a enums como string ou número.
+ */
+export interface EnrichedAdminGroupedReportItemDto
+  extends Omit<AdminGroupedReportItemDto, "target" | "targetType"> {
+  targetType?:
+    | AdminGroupedReportItemDto["targetType"]
+    | "place"
+    | "review"
+    | "comment";
+  status?: number | "pending" | "resolved" | "dismissed";
+  target?: EnrichedReportTargetSnapshotDto | null;
+  reporters?: EnrichedReportReporterDto[] | null;
+}
+
 function getInitials(name: string): string {
   return name
     .trim()
@@ -48,7 +101,26 @@ function daysSince(isoDate: string): number {
   return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
 }
 
-function normalizeReason(rawReason: string): ReportReason {
+function formatarDataCurta(dateValue: string): string {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return dateValue;
+
+  return parsedDate.toLocaleDateString("pt-BR", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatarDataRelativa(isoDate: string): string {
+  const elapsedDays = daysSince(isoDate);
+  if (elapsedDays <= 0) return "hoje";
+  return `há ${elapsedDays}d`;
+}
+
+/**
+ * Normaliza o motivo textual ou código da API para a taxonomia visual de motivos de denúncia.
+ */
+export function mapReasonString(rawReason: string): ReportReason {
   const normalized = rawReason.trim().toLowerCase();
   if (normalized.includes("spam")) return "spam";
   if (normalized.includes("ofens") || normalized.includes("odio"))
@@ -58,6 +130,146 @@ function normalizeReason(rawReason: string): ReportReason {
   if (normalized.includes("escop") || normalized.includes("fora"))
     return "escopo";
   return "improprio";
+}
+
+function resolveTargetKind(
+  rawTargetType:
+    | EnrichedAdminGroupedReportItemDto["targetType"]
+    | string
+    | null
+    | undefined,
+): { targetTypeEnum: number; alvoTipo: ReportTargetKind } {
+  if (rawTargetType === 1 || rawTargetType === "review")
+    return { targetTypeEnum: 1, alvoTipo: "avaliacao" };
+  if (rawTargetType === 2 || rawTargetType === "comment")
+    return { targetTypeEnum: 2, alvoTipo: "comentario" };
+  if (rawTargetType === 3 || rawTargetType === "profile")
+    return { targetTypeEnum: 3, alvoTipo: "perfil" };
+  if (rawTargetType === 0 || rawTargetType === "place")
+    return { targetTypeEnum: 0, alvoTipo: "ponto" };
+
+  if (typeof rawTargetType === "string") {
+    const normalized = rawTargetType.trim().toLowerCase();
+    if (normalized === "review" || normalized === "1")
+      return { targetTypeEnum: 1, alvoTipo: "avaliacao" };
+    if (normalized === "comment" || normalized === "2")
+      return { targetTypeEnum: 2, alvoTipo: "comentario" };
+    if (normalized === "profile" || normalized === "3")
+      return { targetTypeEnum: 3, alvoTipo: "perfil" };
+  }
+
+  return { targetTypeEnum: 0, alvoTipo: "ponto" };
+}
+
+function resolveReportStatus(
+  rawStatus: EnrichedAdminGroupedReportItemDto["status"] | string | undefined,
+): "pendente" | "removido" | "mantido" {
+  if (rawStatus === 1 || rawStatus === "resolved") return "removido";
+  if (rawStatus === 2 || rawStatus === "dismissed") return "mantido";
+  return "pendente";
+}
+
+/**
+ * Converte um item agrupado da API para o modelo de visualização da fila e do painel de detalhes.
+ */
+export function mapApiReportToLocal(
+  item: EnrichedAdminGroupedReportItemDto,
+): ReportCaseMock {
+  const target = item.target;
+  const { targetTypeEnum, alvoTipo } = resolveTargetKind(
+    target?.targetType ?? item.targetType,
+  );
+  resolveReportStatus(item.status);
+
+  const authorName = target?.author?.name ?? "Explorador";
+  const diasAberto = daysSince(item.firstReportedAt);
+
+  const denunciantes =
+    item.reporters && item.reporters.length > 0
+      ? item.reporters.map((reporter) => {
+          const reporterName = reporter.name?.trim() || "Explorador";
+          return {
+            nome: reporterName,
+            iniciais:
+              reporter.initials?.trim() || getInitials(reporterName),
+            motivo: mapReasonString(reporter.reason),
+            quando: formatarDataRelativa(reporter.createdAt),
+            membroDesde: reporter.memberSince
+              ? formatarDataCurta(reporter.memberSince)
+              : "membro verificado",
+            diasDeConta: Number(reporter.accountAgeDays ?? 0),
+          };
+        })
+      : Array.from({
+          length: Math.max(
+            Number(item.reportersCount ?? 0),
+            item.reasons.length,
+            1,
+          ),
+        }).map((_, index) => {
+          const reasonText =
+            item.reasons[index % Math.max(item.reasons.length, 1)] ??
+            "improprio";
+          return {
+            nome: `Denunciante ${index + 1}`,
+            iniciais: `D${index + 1}`,
+            motivo: mapReasonString(reasonText),
+            quando: diasAberto === 0 ? "hoje" : `há ${diasAberto}d`,
+            membroDesde: "membro verificado",
+          };
+        });
+
+  const textoConteudo =
+    target?.content ?? target?.title ?? "Sem conteúdo textual";
+  const localConteudo =
+    target?.placeName ?? target?.title ?? "Local não especificado";
+  const bairroConteudo =
+    target?.neighborhood ?? target?.subtitle ?? "Sorocaba";
+  const notaConteudo =
+    target?.rating !== undefined && target?.rating !== null
+      ? Number(target.rating)
+      : undefined;
+
+  return {
+    id: item.targetId,
+    targetTypeEnum,
+    alvoTipo,
+    alvoNome: target?.placeName ?? target?.title ?? "Conteúdo denunciado",
+    autor: {
+      id: target?.author?.id,
+      nome: authorName,
+      iniciais: getInitials(authorName),
+      titulo: target?.authorTitle ?? "Explorador",
+      membroDesde: target?.authorMemberSince
+        ? formatarDataCurta(target.authorMemberSince)
+        : target?.createdAt
+          ? formatarDataCurta(target.createdAt)
+          : "recente",
+      avaliacoesEscritas: Number(target?.authorReviewsCount ?? 0),
+      conteudoRemovido: Number(target?.authorRemovedContentCount ?? 0),
+    },
+    diasAberto,
+    trecho: textoConteudo,
+    conteudo: {
+      corpo: textoConteudo,
+      local: localConteudo,
+      bairro: bairroConteudo,
+      data: new Date(
+        target?.createdAt ?? item.firstReportedAt,
+      ).toLocaleDateString("pt-BR"),
+      nota: notaConteudo,
+      categoria: target?.categoryName ?? undefined,
+      coordenadas: target?.coordinates ?? undefined,
+      avaliacaoMae: target?.parentReviewContent
+        ? {
+            autor: "",
+            nota: notaConteudo ?? 0,
+            corpo: target.parentReviewContent,
+          }
+        : undefined,
+    },
+    denunciantes,
+  };
 }
 
 /**
@@ -198,87 +410,33 @@ export function useReports({
     const rawItems =
       reportsResponse.status === 200 ? reportsResponse.data.items : [];
 
-    const kindMap: Record<number, ReportTargetKind> = {
-      0: "ponto",
-      1: "avaliacao",
-      2: "comentario",
-      3: "perfil",
-    };
-
-    return rawItems.map((item) => {
-      const targetTypeEnum = Number(
-        item.target?.targetType ?? item.targetType ?? 0,
-      );
-      const alvoTipo = kindMap[targetTypeEnum] ?? "ponto";
-      const authorName = item.target?.author?.name ?? "Explorador";
-      const totalReporters = Math.max(
-        Number(item.reportersCount ?? 0),
-        item.reasons.length,
-        1,
-      );
-      const diasAberto = daysSince(item.firstReportedAt);
-
-      const denunciantes = Array.from({ length: totalReporters }).map(
-        (_, index) => {
-          const reasonText =
-            item.reasons[index % Math.max(item.reasons.length, 1)] ??
-            "improprio";
-          return {
-            nome: `Denunciante ${index + 1}`,
-            iniciais: `D${index + 1}`,
-            motivo: normalizeReason(reasonText),
-            quando: diasAberto === 0 ? "hoje" : `há ${diasAberto}d`,
-            membroDesde: "membro verificado",
-          };
-        },
-      );
-
-      return {
-        id: item.targetId,
-        targetTypeEnum,
-        alvoTipo,
-        alvoNome: item.target?.title ?? "Conteúdo denunciado",
-        autor: {
-          id: item.target?.author?.id,
-          nome: authorName,
-          iniciais: getInitials(authorName),
-          titulo: "Explorador",
-          membroDesde: new Date(
-            item.target?.createdAt ?? item.firstReportedAt,
-          ).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }),
-          avaliacoesEscritas: 0,
-          conteudoRemovido: 0,
-        },
-        diasAberto,
-        trecho: item.target?.content ?? item.target?.title ?? "",
-        conteudo: {
-          corpo: item.target?.content ?? "",
-          local: item.target?.subtitle ?? item.target?.title ?? "Sorocaba",
-          bairro: item.target?.subtitle ?? "Sorocaba",
-          data: new Date(
-            item.target?.createdAt ?? item.firstReportedAt,
-          ).toLocaleDateString("pt-BR"),
-        },
-        denunciantes,
-      };
-    });
+    return rawItems.map((reportItem) =>
+      mapApiReportToLocal(reportItem as EnrichedAdminGroupedReportItemDto),
+    );
   }, [reportsResponse]);
 
   const initialFeedback = useMemo<FeedbackMock[]>(() => {
     const rawItems =
       feedbackResponse.status === 200 ? feedbackResponse.data.items : [];
 
-    const kindMap: Record<number, FeedbackKind> = {
+    const kindMap: Record<string, FeedbackKind> = {
       0: "bug",
       1: "sugestao",
       2: "elogio",
+      bug: "bug",
+      suggestion: "sugestao",
+      sugestao: "sugestao",
+      compliment: "elogio",
+      praise: "elogio",
+      elogio: "elogio",
     };
 
     return rawItems.map((item) => {
       const authorName = item.author?.name?.trim();
+      const rawCategory = String(item.category ?? "").toLowerCase();
       return {
         id: item.id,
-        tipo: kindMap[Number(item.category)] ?? "sugestao",
+        tipo: kindMap[rawCategory] ?? "sugestao",
         mensagem: item.message,
         status: "novo" as FeedbackStatus,
         diasRecebido: daysSince(item.createdAt),

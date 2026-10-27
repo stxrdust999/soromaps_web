@@ -4,9 +4,12 @@ import { updateTag } from "next/cache";
 
 import { FEED_LIST_TAG, STORIES_LIST_TAG, storyShowTag } from "@/constants/reports";
 import { getApiErrorMessage } from "@/helpers/api-error";
+import type { ProblemDetails } from "@/http/api.schemas";
 import { getPlaceById, listPlaces } from "@/http/places/places";
-import { createStory, publishStory } from "@/http/stories/stories";
+import { createStory, publishStory, updateStory } from "@/http/stories/stories";
+import { http, type HttpResponse } from "@/lib/client";
 import {
+  buildPrompt,
   type GeminiSchema,
   geminiModelDisplayName,
   generateJson,
@@ -18,6 +21,8 @@ import {
   type PublishStorySchema,
   type StoryDraftSchema,
   storyDraftSchema,
+  updateStorySchema,
+  type UpdateStorySchema,
 } from "@/validations/stories";
 
 /**
@@ -282,22 +287,25 @@ export async function generateStoryDraftAction(
     };
   }
 
-  const factPromises = result.data.localIds.map(placeFacts);
-  const factsResolved = await Promise.all(factPromises);
-  const facts = factsResolved.filter((block): block is string => block !== null);
+  let facts: string[] = [];
 
-  if (facts.length < result.data.localIds.length) {
-    return { success: false, message: INVALID_PAYLOAD_MESSAGE, errors: null };
+  if (result.data.localIds.length > 0) {
+    const factPromises = result.data.localIds.map(placeFacts);
+    const factsResolved = await Promise.all(factPromises);
+    facts = factsResolved.filter((block): block is string => block !== null);
+
+    if (facts.length === 0) {
+      return { success: false, message: INVALID_PAYLOAD_MESSAGE, errors: null };
+    }
   }
 
   const response = await generateJson({
     system: SYSTEM_INSTRUCTION,
     schema: DRAFT_SCHEMA,
-    prompt: `Tema pedido pela redação: ${result.data.tema}
-
-Escreva a pauta usando apenas os lugares abaixo, nesta ordem.
-
-${facts.join("\n\n")}`,
+    prompt: buildPrompt({
+      tema: result.data.tema,
+      places: facts,
+    }),
   });
 
   if (!response.ok) {
@@ -442,6 +450,143 @@ export async function publishStoryAction(
     };
   } catch (error) {
     console.error("publishStoryAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+}
+
+/**
+ * Atualiza os dados de conteúdo e paradas de uma pauta editorial existente com suporte a publicação imediata.
+ *
+ * @param rawInput Dados validados contendo identificador da pauta, conteúdo textual e locais associados.
+ * @returns Estado da operação com o slug resultante para redirecionamento.
+ */
+export async function updateStoryAction(
+  rawInput: UpdateStorySchema,
+): Promise<FormState & { storySlug?: string }> {
+  const result = updateStorySchema.safeParse(rawInput);
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: "Verifique os campos da pauta antes de prosseguir.",
+      errors: result.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  const { id, publishImmediately, ...storyData } = result.data;
+
+  try {
+    const updateResponse = await updateStory(id, {
+      slug: storyData.slug,
+      title: storyData.title,
+      subtitle: storyData.subtitle,
+      neighborhood: storyData.neighborhood ?? null,
+      introText: storyData.introText,
+      closingText: storyData.closingText ?? null,
+      places: storyData.places.map((place, index) => ({
+        placeId: place.placeId,
+        sortOrder: index + 1,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? null,
+      })),
+    });
+
+    if (updateResponse.status !== 200) {
+      return {
+        success: false,
+        message: getApiErrorMessage(
+          updateResponse.data,
+          "Não foi possível atualizar a pauta editorial.",
+        ),
+        errors: null,
+      };
+    }
+
+    const updatedStory = updateResponse.data;
+
+    if (publishImmediately) {
+      const publishResponse = await publishStory(updatedStory.id);
+      if (publishResponse.status !== 200) {
+        updateTag(storyShowTag(updatedStory.slug));
+        updateTag(STORIES_LIST_TAG);
+        return {
+          success: true,
+          message:
+            "Pauta atualizada como rascunho. Porém, ocorreu um erro ao publicá-la automaticamente.",
+          errors: null,
+          storySlug: updatedStory.slug,
+        };
+      }
+    }
+
+    updateTag(storyShowTag(updatedStory.slug));
+    updateTag(STORIES_LIST_TAG);
+    updateTag(FEED_LIST_TAG);
+
+    return {
+      success: true,
+      message: publishImmediately
+        ? "Pauta atualizada e publicada com sucesso para a comunidade!"
+        : "Rascunho da pauta atualizado com sucesso!",
+      errors: null,
+      storySlug: updatedStory.slug,
+    };
+  } catch (error) {
+    console.error("updateStoryAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+}
+
+/**
+ * Exclui um rascunho de pauta editorial existente e invalida os caches relacionados.
+ *
+ * @param id Identificador único UUID da pauta a ser excluída.
+ * @param slug Slug amigável da pauta para invalidação pontual do cache de detalhes.
+ * @returns Estado da operação com mensagem para feedback ao usuário.
+ */
+export async function deleteStoryAction(
+  id: string,
+  slug?: string,
+): Promise<FormState> {
+  try {
+    const response = await http<HttpResponse<ProblemDetails | undefined>>(
+      `/api/stories/${id}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (response.status !== 204) {
+      return {
+        success: false,
+        message: getApiErrorMessage(
+          response.data,
+          "Não foi possível excluir o rascunho da pauta.",
+        ),
+        errors: null,
+      };
+    }
+
+    if (slug) updateTag(storyShowTag(slug));
+    updateTag(STORIES_LIST_TAG);
+    updateTag(FEED_LIST_TAG);
+
+    return {
+      success: true,
+      message: "Rascunho de pauta excluído com sucesso.",
+      errors: null,
+    };
+  } catch (error) {
+    console.error("deleteStoryAction error:", error);
     return {
       success: false,
       message: REQUEST_FAILED_MESSAGE,

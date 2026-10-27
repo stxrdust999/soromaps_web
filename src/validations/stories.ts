@@ -4,17 +4,16 @@ import z from "zod";
 const MIN_PARAGRAPHS = 3;
 const MAX_PARAGRAPHS = 6;
 
-/** Lugares por pauta: menos de dois não é roteiro, mais de quatro não se lê. */
-const MIN_PLACES = 2;
+/** Limite de lugares opcionais por pauta editorial. */
+const MIN_PLACES = 0;
 const MAX_PLACES = 4;
 
 /**
  * Pedido de rascunho de pauta.
  *
- * O tema é livre, mas os lugares **não**: quem escolhe é a tela, a partir do
- * que existe no mapa. Deixar o modelo escolher o assunto sobre a cidade
- * inteira é o caminho mais curto para ele citar um estabelecimento que não
- * existe.
+ * O tema é obrigatório e os lugares são opcionais: quando informados, a IA
+ * restringe os fatos aos pontos selecionados; quando vazios, redige uma pauta
+ * editorial geral sobre Sorocaba focada no tema.
  */
 const generateStorySchema = z.object({
   tema: z
@@ -24,7 +23,6 @@ const generateStorySchema = z.object({
     .max(160, "Tema muito longo — resuma em uma linha"),
   localIds: z
     .array(z.string().min(1))
-    .min(MIN_PLACES, `Escolha ao menos ${MIN_PLACES} lugares`)
     .max(MAX_PLACES, `No máximo ${MAX_PLACES} lugares por pauta`),
 });
 
@@ -87,19 +85,30 @@ const publishStorySchema = z.object({
         localTip: z.string().trim().max(280).optional().nullable(),
       }),
     )
-    .min(MIN_PLACES, `Vincule ao menos ${MIN_PLACES} locais na pauta`)
-    .max(MAX_PLACES, `No máximo ${MAX_PLACES} locais por pauta`),
+    .max(MAX_PLACES, `No máximo ${MAX_PLACES} locais por pauta`)
+    .default([]),
 });
 
 type PublishStorySchema = z.infer<typeof publishStorySchema>;
+
+/**
+ * Validação para edição e atualização de uma pauta editorial existente.
+ */
+const updateStorySchema = publishStorySchema.extend({
+  id: z.string().uuid("Identificador da pauta inválido"),
+});
+
+type UpdateStorySchema = z.infer<typeof updateStorySchema>;
 
 export {
   generateStorySchema,
   storyDraftSchema,
   publishStorySchema,
+  updateStorySchema,
   MAX_PLACES,
   MIN_PLACES,
   type GenerateStorySchema,
   type StoryDraftSchema,
   type PublishStorySchema,
+  type UpdateStorySchema,
 };

@@ -11,6 +11,7 @@ import {
 import {
   ACHIEVEMENT_EVENTS,
   resolveAchievementIcon,
+  TARGET_LABEL,
 } from "@/constants/achievements";
 import {
   type AchievementCriterion,
@@ -31,7 +32,7 @@ const EVENT_NUMBER_TO_KEY: Record<number, AchievementMock["evento"]> = {
   1: "avaliar",
   2: "favoritar",
   3: "criar",
-  4: "avaliar",
+  4: "comentar" as AchievementMock["evento"],
 };
 
 const TARGET_NUMBER_TO_KIND: Record<
@@ -70,6 +71,14 @@ export function toCriterion(
  * Frase do critério pronta para exibição.
  */
 export function describeCriterion(achievement: AchievementMock): string {
+  if ((achievement.evento as string) === "comentar") {
+    const tail =
+      achievement.tipoAlvo && achievement.alvo
+        ? ` ${TARGET_LABEL[achievement.tipoAlvo]} ${achievement.alvo}`
+        : "";
+    const noun = achievement.quantidade === 1 ? "comentário" : "comentários";
+    return `Escrever ${achievement.quantidade} ${noun}${tail}`;
+  }
   return formatCriterion(toCriterion(achievement)) ?? "Critério incompleto";
 }
 
@@ -77,6 +86,7 @@ export function describeCriterion(achievement: AchievementMock): string {
  * Gatilho correspondente ao evento da conquista.
  */
 export function triggerOf(achievement: AchievementMock) {
+  if ((achievement.evento as string) === "comentar") return "metric";
   return ACHIEVEMENT_EVENTS[achievement.evento]?.trigger ?? "metric";
 }
 

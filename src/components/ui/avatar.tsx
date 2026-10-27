@@ -1,37 +1,62 @@
 "use client";
 
 import { Avatar as AvatarPrimitive } from "radix-ui";
-import type * as React from "react";
+import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { getDeterministicAvatar } from "@/utils/avatars/avatar-placeholders";
 
+interface AvatarContextValue {
+  identifier?: string | null;
+}
+
+const AvatarContext = React.createContext<AvatarContextValue | null>(null);
+
+/**
+ * Contêiner raiz para o componente de Avatar com suporte a fallback determinístico ilustrado.
+ */
 function Avatar({
   className,
   size = "default",
+  identifier,
+  children,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Root> & {
   size?: "default" | "sm" | "lg";
+  identifier?: string | null;
 }) {
   return (
-    <AvatarPrimitive.Root
-      data-slot="avatar"
-      data-size={size}
-      className={cn(
-        "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:border-border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
-        className,
-      )}
-      {...props}
-    />
+    <AvatarContext.Provider value={{ identifier }}>
+      <AvatarPrimitive.Root
+        data-slot="avatar"
+        data-size={size}
+        className={cn(
+          "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:border-border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </AvatarPrimitive.Root>
+    </AvatarContext.Provider>
   );
 }
 
+/**
+ * Imagem primária do Avatar que tenta carregar a fonte informada e recorre ao fallback em caso de erro ou ausência de foto.
+ */
 function AvatarImage({
   className,
+  src,
+  fallbackIdentifier: _fallbackIdentifier,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+}: React.ComponentProps<typeof AvatarPrimitive.Image> & {
+  fallbackIdentifier?: string | null;
+}) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      src={src || undefined}
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className,
@@ -41,22 +66,47 @@ function AvatarImage({
   );
 }
 
+/**
+ * Fallback para o Avatar exibido durante o carregamento, erro da imagem ou ausência de foto personalizada.
+ */
 function AvatarFallback({
   className,
+  identifier,
+  children,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+}: React.ComponentProps<typeof AvatarPrimitive.Fallback> & {
+  identifier?: string | null;
+}) {
+  const context = React.useContext(AvatarContext);
+  const fallbackText =
+    typeof children === "string" ? children.trim() : undefined;
+  const effectiveIdentifier = identifier ?? context?.identifier ?? fallbackText;
+
   return (
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs",
+        "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs overflow-hidden",
         className,
       )}
       {...props}
-    />
+    >
+      {effectiveIdentifier ? (
+        <img
+          src={getDeterministicAvatar(effectiveIdentifier)}
+          alt="Avatar ilustrado"
+          className="size-full object-cover"
+        />
+      ) : (
+        children
+      )}
+    </AvatarPrimitive.Fallback>
   );
 }
 
+/**
+ * Badge de status posicionado no canto inferior do avatar.
+ */
 function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -73,6 +123,9 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   );
 }
 
+/**
+ * Agrupador visual de avatares com sobreposição suave.
+ */
 function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -86,6 +139,9 @@ function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+/**
+ * Contador numérico para listas agrupadas de avatares com excedente.
+ */
 function AvatarGroupCount({
   className,
   ...props

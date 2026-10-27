@@ -14,9 +14,9 @@ const REQUEST_FAILED_MESSAGE =
  * Creates a mute scope on the activity feed (e.g., category or neighborhood).
  */
 export async function createFeedMuteAction(payload: {
-  scopeType: number; // 0: Category, 1: Neighborhood, 2: Place
+  scopeType: number; // 0: Neighborhood, 1: Category, 2: ItemKind
   scopeValue: string;
-}): Promise<FormState> {
+}): Promise<FormState & { muteId?: string }> {
   if (!payload.scopeValue) {
     return {
       success: false,
@@ -46,6 +46,7 @@ export async function createFeedMuteAction(payload: {
       success: true,
       message: "Você verá menos conteúdo deste escopo no feed.",
       errors: null,
+      muteId: response.data.id,
     };
   } catch (error) {
     console.error("createFeedMuteAction error:", error);

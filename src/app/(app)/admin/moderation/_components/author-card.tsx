@@ -12,9 +12,59 @@ interface AuthorCardProps {
 }
 
 /**
- * Contexto do autor da sugestão na fila de moderação.
+ * Contexto do autor da sugestão ou da origem de sincronização externa na fila de moderação.
  */
 export function AuthorCard({ author }: AuthorCardProps) {
+  if (author.isExternalSync)
+    return (
+      <div className="flex flex-col gap-4 rounded-lg border p-4">
+        {/* sync origin - header */}
+        <div className="flex items-center gap-3">
+          <Avatar className="size-9">
+            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+              {author.iniciais}
+            </AvatarFallback>
+          </Avatar>
+
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Sincronização Externa</p>
+            <p className="text-muted-foreground text-xs">
+              OpenStreetMap / Nominatim API
+            </p>
+          </div>
+        </div>
+
+        {/* sync origin - badge */}
+        <Badge
+          variant="outline"
+          className="border-primary/30 bg-primary/10 text-primary w-fit"
+        >
+          Captura automatizada · Sem autor humano
+        </Badge>
+
+        {/* sync metadata - list */}
+        <dl className="flex flex-col gap-1.5 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Meio de criação</dt>
+            <dd>Sync via CLI / API externa</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Fonte dos dados</dt>
+            <dd>{author.syncSource ?? "OpenStreetMap"}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Requer curadoria</dt>
+            <dd>Sim (validação de ficha)</dd>
+          </div>
+        </dl>
+
+        <p className="text-muted-foreground text-xs">
+          Pontos importados via sincronização não contabilizam conquistas nem
+          possuem perfil de explorador vinculado.
+        </p>
+      </div>
+    );
+
   const ratio = author.enviados > 0 ? author.aprovados / author.enviados : 0;
   const trusted = ratio >= TRUSTED_RATIO;
 

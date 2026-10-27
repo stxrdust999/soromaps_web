@@ -8,13 +8,15 @@ import {
   TriangleAlertIcon,
   UsersIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import z from "zod";
 
 import { AchievementBadge } from "@/components/ui/achievement-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   Dialog,
   DialogContent,
@@ -63,7 +65,65 @@ import {
 /** Sentinela do "sem alvo" — `Select` do Radix não aceita valor vazio. */
 const NO_TARGET = "nenhum";
 
-const EMPTY_FORM: AchievementFormSchema = {
+interface FormEventDefinition {
+  label: string;
+  verbo: string;
+  substantivo: string;
+  substantivoSingular: string;
+  trigger: "metric" | "api" | "streak";
+  alvos: AchievementTargetKind[];
+}
+
+const CATALOG_ACHIEVEMENT_EVENTS: Record<string, FormEventDefinition> = {
+  ...ACHIEVEMENT_EVENTS,
+  comentar: {
+    label: "Comentar",
+    verbo: "Escrever",
+    substantivo: "comentários",
+    substantivoSingular: "comentário",
+    trigger: "metric",
+    alvos: ["categoria", "bairro"],
+  },
+};
+
+const CONFIGURABLE_EVENT_KEYS = [
+  "visitar",
+  "avaliar",
+  "favoritar",
+  "criar",
+  "comentar",
+] as const;
+
+const dialogAchievementFormSchema = z
+  .object({
+    nome: z.string().trim().min(1, "Nome obrigatório"),
+    descricao: z.string().trim().min(1, "Descrição obrigatória"),
+    icone: z.enum(ACHIEVEMENT_ICON_KEYS),
+    cor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "Use uma cor em hexadecimal, ex.: #1447e6"),
+    evento: z.string().min(1, "Evento obrigatório"),
+    quantidade: z
+      .number()
+      .int("Use um número inteiro")
+      .min(1, "A quantidade precisa ser pelo menos 1"),
+    tipoAlvo: z.enum(["categoria", "bairro"]).nullable(),
+    alvo: z.string().nullable(),
+    ativa: z.boolean(),
+  })
+  .superRefine((formValues, context) => {
+    if (formValues.tipoAlvo && !formValues.alvo) {
+      context.addIssue({
+        code: "custom",
+        path: ["alvo"],
+        message: "Escolha o alvo para o critério fechar",
+      });
+    }
+  });
+
+type DialogAchievementFormData = z.infer<typeof dialogAchievementFormSchema>;
+
+const EMPTY_FORM: DialogAchievementFormData = {
   nome: "",
   descricao: "",
   icone: "award",
@@ -99,8 +159,8 @@ export function AchievementFormDialog({
   const [iconQuery, setIconQuery] = useState("");
   const [apiReach, setApiReach] = useState<number | null>(null);
 
-  const form = useForm<AchievementFormSchema>({
-    resolver: zodResolver(achievementFormSchema),
+  const form = useForm<DialogAchievementFormData>({
+    resolver: zodResolver(dialogAchievementFormSchema),
     defaultValues: EMPTY_FORM,
   });
 
@@ -129,17 +189,41 @@ export function AchievementFormDialog({
   }, [open, achievement, categories, form]);
 
   const values = form.watch();
-  const definition = ACHIEVEMENT_EVENTS[values.evento];
+  const definition =
+    CATALOG_ACHIEVEMENT_EVENTS[values.evento] ??
+    CATALOG_ACHIEVEMENT_EVENTS.visitar;
   const trigger = TRIGGER_LABEL[definition.trigger];
 
   const criterion = {
-    evento: values.evento,
+    evento: values.evento as AchievementEventKey,
     quantidade: values.quantidade,
     tipoAlvo: values.tipoAlvo,
     alvo: values.alvo,
   };
 
-  const phrase = formatCriterion(criterion);
+  const phrase = useMemo(() => {
+    if (values.evento === "comentar") {
+      if (!Number.isFinite(values.quantidade) || values.quantidade < 1) return null;
+      if (values.tipoAlvo && !values.alvo) return null;
+      const noun =
+        values.quantidade === 1
+          ? definition.substantivoSingular
+          : definition.substantivo;
+      const tail =
+        values.tipoAlvo && values.alvo
+          ? ` ${TARGET_LABEL[values.tipoAlvo]} ${values.alvo}`
+          : "";
+      return `${definition.verbo} ${values.quantidade} ${noun}${tail}`;
+    }
+    return formatCriterion(criterion);
+  }, [
+    values.evento,
+    values.quantidade,
+    values.tipoAlvo,
+    values.alvo,
+    definition,
+    criterion,
+  ]);
 
   useEffect(() => {
     if (!open || !phrase) {
@@ -173,7 +257,18 @@ export function AchievementFormDialog({
     values.alvo,
   ]);
 
-  const reach = phrase ? (apiReach ?? estimateReach(criterion)) : null;
+  const reach = phrase
+    ? (apiReach ??
+        (values.evento === "comentar"
+          ? Math.max(
+              Math.round(
+                (750 * (values.tipoAlvo ? 0.32 : 1)) /
+                  values.quantidade ** 1.35,
+              ),
+              0,
+            )
+          : estimateReach(criterion)))
+    : null;
 
   const targetOptions =
     values.tipoAlvo === "bairro" ? neighborhoods : categories;
@@ -202,7 +297,9 @@ export function AchievementFormDialog({
         <Form {...form}>
           <form
             id="achievement-form"
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={form.handleSubmit((formValues) =>
+              onSubmit(formValues as unknown as AchievementFormSchema),
+            )}
             className="grid max-h-[64vh] overflow-auto md:grid-cols-[1.1fr_1fr]"
           >
             <div className="flex flex-col gap-5 p-6 md:border-r">
@@ -287,25 +384,15 @@ export function AchievementFormDialog({
                 name="cor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cor</FormLabel>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {ACHIEVEMENT_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          title={color}
-                          aria-label={`Usar a cor ${color}`}
-                          aria-pressed={field.value === color}
-                          onClick={() => field.onChange(color)}
-                          className={cn(
-                            "size-7 rounded-md border-2 border-transparent",
-                            field.value === color && "border-foreground",
-                          )}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
+                    <FormLabel>Cor da Conquista</FormLabel>
+                    <FormControl>
+                      <ColorPicker
+                        inline
+                        value={field.value}
+                        onChange={field.onChange}
+                        presets={ACHIEVEMENT_COLORS}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -333,11 +420,10 @@ export function AchievementFormDialog({
                         onValueChange={(value) => {
                           field.onChange(value);
 
-                          // Alvo que o novo evento não aceita precisa cair:
-                          // "seguir 10 usuários da categoria Bar" não existe.
+                          const targetDefinition =
+                            CATALOG_ACHIEVEMENT_EVENTS[value];
                           const allowed: AchievementTargetKind[] =
-                            ACHIEVEMENT_EVENTS[value as AchievementEventKey]
-                              .alvos;
+                            targetDefinition?.alvos ?? [];
 
                           if (
                             values.tipoAlvo &&
@@ -353,9 +439,9 @@ export function AchievementFormDialog({
                         </SelectTrigger>
 
                         <SelectContent>
-                          {ACHIEVEMENT_EVENT_KEYS.map((key) => (
+                          {CONFIGURABLE_EVENT_KEYS.map((key) => (
                             <SelectItem key={key} value={key}>
-                              {ACHIEVEMENT_EVENTS[key].label}
+                              {CATALOG_ACHIEVEMENT_EVENTS[key].label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -627,7 +713,9 @@ export function AchievementFormDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onPreviewUnlock(values)}
+                onClick={() =>
+                  onPreviewUnlock(values as unknown as AchievementFormSchema)
+                }
               >
                 <SparklesIcon />
                 Ver como o jogador vê

@@ -12,10 +12,15 @@ import {
   updateCurrentUser,
 } from "@/http/users/users";
 import { clearAuthCookies } from "@/lib/session";
+import { http, type HttpResponse } from "@/lib/client";
 import type { FormState } from "@/types/form";
 import {
+  type ChangeEmailSchema,
+  type ChangePasswordSchema,
   type CreateUserSchema,
   type UpdateUserSchema,
+  changeEmailSchema,
+  changePasswordSchema,
   createUserSchema,
   updateUserSchema,
 } from "@/validations/users";
@@ -253,4 +258,104 @@ export async function deleteCurrentUserAction(): Promise<FormState> {
     message: "Conta excluída com sucesso.",
     errors: null,
   };
+}
+
+/**
+ * Changes authenticated user password after verifying current credentials.
+ */
+export async function changePasswordAction(
+  data: ChangePasswordSchema,
+): Promise<FormState> {
+  const result = changePasswordSchema.safeParse(data);
+
+  if (!result.success)
+    return {
+      success: false,
+      message: INVALID_PAYLOAD_MESSAGE,
+      errors: result.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+
+  try {
+    const response = await http<HttpResponse<void>>(
+      "/api/users/me/change-password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(result.data),
+      },
+    );
+
+    if (response.status !== 204)
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
+
+    return {
+      success: true,
+      message: "Senha alterada com sucesso.",
+      errors: null,
+    };
+  } catch (error) {
+    console.error("changePasswordAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
+}
+
+/**
+ * Updates authenticated user email address after confirming current password.
+ */
+export async function changeEmailAction(
+  data: ChangeEmailSchema,
+): Promise<FormState> {
+  const result = changeEmailSchema.safeParse(data);
+
+  if (!result.success)
+    return {
+      success: false,
+      message: INVALID_PAYLOAD_MESSAGE,
+      errors: result.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+
+  try {
+    const response = await http<HttpResponse<unknown>>(
+      "/api/users/me/email",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(result.data),
+      },
+    );
+
+    if (response.status !== 200)
+      return {
+        success: false,
+        message: getApiErrorMessage(response.data, REQUEST_FAILED_MESSAGE),
+        errors: null,
+      };
+
+    updateTag(CURRENT_USER_TAG);
+
+    return {
+      success: true,
+      message: "E-mail atualizado com sucesso.",
+      errors: null,
+    };
+  } catch (error) {
+    console.error("changeEmailAction error:", error);
+    return {
+      success: false,
+      message: REQUEST_FAILED_MESSAGE,
+      errors: null,
+    };
+  }
 }

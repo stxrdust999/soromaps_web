@@ -31,6 +31,8 @@ export interface ModerationAuthorView {
   aprovados: number;
   membroDesde: string;
   avaliacoesEscritas: number;
+  isExternalSync?: boolean;
+  syncSource?: string;
 }
 
 export type ModerationAuthorMock = ModerationAuthorView;
@@ -102,6 +104,8 @@ export interface ModerationItemView {
   fotos: number;
   photoUrls?: string[];
   autorNovo?: boolean;
+  origemSync?: boolean;
+  fonteSync?: string;
   campos: ModerationFieldsView;
   duplicata?: DuplicateHintView;
   vizinhos: MapNeighborView[];

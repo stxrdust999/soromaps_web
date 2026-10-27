@@ -82,7 +82,7 @@ export function ReportQueue({
   onClearFilters,
 }: ReportQueueProps) {
   return (
-    <section className="flex h-full flex-col border-r">
+    <section className="flex h-full flex-col">
       <div className="flex shrink-0 flex-col gap-2.5 border-b p-3.5">
         <div className="relative">
           <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
@@ -103,11 +103,11 @@ export function ReportQueue({
           >
             <SelectTrigger
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-0"
               aria-label="Tipo de alvo"
             >
-              <ShapesIcon className="size-3.5" />
-              <SelectValue />
+              <ShapesIcon className="size-3.5 shrink-0" />
+              <SelectValue className="truncate" />
             </SelectTrigger>
 
             <SelectContent>
@@ -128,11 +128,11 @@ export function ReportQueue({
           >
             <SelectTrigger
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-0"
               aria-label="Sinal de risco"
             >
-              <TriangleAlertIcon className="size-3.5" />
-              <SelectValue />
+              <TriangleAlertIcon className="size-3.5 shrink-0" />
+              <SelectValue className="truncate" />
             </SelectTrigger>
 
             <SelectContent>
@@ -146,7 +146,7 @@ export function ReportQueue({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground text-xs truncate">
             {reports.length === 1 ? "1 caso" : `${reports.length} casos`} · mais
             denunciados primeiro
           </span>
@@ -156,7 +156,7 @@ export function ReportQueue({
               variant="ghost"
               size="xs"
               onClick={onClearFilters}
-              className="text-muted-foreground"
+              className="text-muted-foreground shrink-0"
             >
               Limpar
             </Button>
@@ -194,7 +194,7 @@ export function ReportQueue({
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">
+                  <Badge variant="secondary" className="shrink-0">
                     <Icon size={12} />
                     <span className="text-xs font-light">
                       {TARGET_LABEL[report.alvoTipo].label}
@@ -205,7 +205,7 @@ export function ReportQueue({
                     variant={
                       total >= HEAVY_REPORT_COUNT ? "destructive" : "outline"
                     }
-                    className="tabular-nums"
+                    className="tabular-nums shrink-0"
                   >
                     <FlagIcon size={12} />
                     <span className="text-xs font-light">
@@ -214,14 +214,14 @@ export function ReportQueue({
                   </Badge>
 
                   {overdue ? (
-                    <Badge variant="warning" className="ml-auto">
+                    <Badge variant="warning" className="ml-auto shrink-0">
                       <ClockIcon size={12} />
                       <span className="text-xs font-light">
                         {formatWaitingDays(report.diasAberto)}
                       </span>
                     </Badge>
                   ) : (
-                    <span className="text-muted-foreground ml-auto text-xs whitespace-nowrap">
+                    <span className="text-muted-foreground ml-auto text-xs whitespace-nowrap shrink-0">
                       {formatWaitingDays(report.diasAberto)}
                     </span>
                   )}

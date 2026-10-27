@@ -135,7 +135,10 @@ export function ExplorerProfileContent({
         }
         subitems={
           <div className="mt-4 flex items-start gap-4">
-            <Avatar className="size-16 shrink-0">
+            <Avatar
+              className="size-16 shrink-0"
+              identifier={explorer.id ?? explorer.nome}
+            >
               {explorer.avatarUrl && (
                 <AvatarImage src={explorer.avatarUrl} alt={explorer.nome} />
               )}

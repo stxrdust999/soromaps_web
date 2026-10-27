@@ -64,7 +64,7 @@ export function QueuePanel({
   onRejectMarked,
 }: QueuePanelProps) {
   return (
-    <section className="relative flex h-full flex-col border-r">
+    <section className="relative flex h-full flex-col">
       {/* filters - toolbar */}
       <div className="flex shrink-0 flex-col gap-2.5 px-4 pt-3.5 pb-2.5">
         <div className="flex gap-2">
@@ -74,8 +74,12 @@ export function QueuePanel({
               onFilterChange({ status: status as ModerationStatus })
             }
           >
-            <SelectTrigger size="sm" className="flex-1" aria-label="Status">
-              <SelectValue />
+            <SelectTrigger
+              size="sm"
+              className="flex-1 min-w-0"
+              aria-label="Status"
+            >
+              <SelectValue className="truncate" />
             </SelectTrigger>
 
             <SelectContent>
@@ -91,8 +95,12 @@ export function QueuePanel({
             value={filters.categoria}
             onValueChange={(categoria) => onFilterChange({ categoria })}
           >
-            <SelectTrigger size="sm" className="flex-1" aria-label="Categoria">
-              <SelectValue />
+            <SelectTrigger
+              size="sm"
+              className="flex-1 min-w-0"
+              aria-label="Categoria"
+            >
+              <SelectValue className="truncate" />
             </SelectTrigger>
 
             <SelectContent>
@@ -112,6 +120,7 @@ export function QueuePanel({
           <Button
             variant={filters.soComAlerta ? "default" : "outline"}
             size="xs"
+            className="shrink-0"
             aria-pressed={filters.soComAlerta}
             onClick={() =>
               onFilterChange({ soComAlerta: !filters.soComAlerta })
@@ -121,7 +130,7 @@ export function QueuePanel({
             Só os com alerta
           </Button>
 
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground truncate text-xs">
             Mais antigos primeiro
           </span>
         </div>

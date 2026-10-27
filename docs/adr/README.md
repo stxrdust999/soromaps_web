@@ -60,3 +60,4 @@ conteúdo nos dois lugares.
 | [0002](./user/0002-feed-sem-grafo-social.md) | Feed |
 | [0003](./user/0003-comunidade-selo-e-pauta-ia.md) | Comunidade e pautas |
 | [0004](./user/0004-perfil-hub-com-abas.md) | Perfil (absorveu visitas, favoritos, conquistas e estatísticas) |
+| [0005](./user/0005-alinhamento-hidratacao-pautas-geolocalizacao-e-ui.md) | Alinhamento full-stack: métricas, pautas livres, geolocalização real e microinterações |

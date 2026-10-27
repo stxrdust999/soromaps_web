@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ImageIcon, Loader2Icon, MapPinnedIcon, SaveIcon } from "lucide-react";
-import { use, useEffect, useMemo, useState } from "react";
+import { Loader2Icon, MapPinnedIcon, SaveIcon } from "lucide-react";
+import { use, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 
@@ -11,6 +11,7 @@ import {
   createPlaceAction,
   createPlacePhotoUploadUrlAction,
 } from "@/actions/places";
+import { FileUploadDropzone } from "@/components/blocks/file-upload-dropzone";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -37,10 +38,20 @@ import { createMarkerSchema } from "@/validations/markers";
 
 const DESCRIPTION_MAX_LENGTH = 160;
 const SECRET_MAX_LENGTH = 200;
+const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const createMarkerFormSchema = createMarkerSchema.extend({
   foto: z
     .custom<File>((value) => value === undefined || value instanceof File)
+    .refine(
+      (file) => !file || file.size <= MAX_IMAGE_SIZE_BYTES,
+      "A foto deve ter no máximo 15 MB",
+    )
+    .refine(
+      (file) => !file || ACCEPTED_IMAGE_TYPES.includes(file.type),
+      "Formato inválido. Aceitos: JPG, PNG ou WebP",
+    )
     .optional(),
   bairro: z
     .string()
@@ -67,6 +78,7 @@ type CreateMarkerFormSchema = z.infer<typeof createMarkerFormSchema>;
 
 interface CreateMarkerFormProps {
   coords: { lat: number; lng: number };
+  defaultDistrict?: string;
   promises: {
     categoriesPromise: Promise<listCategoriesResponse>;
   };
@@ -79,6 +91,7 @@ interface CreateMarkerFormProps {
  */
 export function CreateMarkerForm({
   coords,
+  defaultDistrict,
   promises,
   onChangeLocation,
   onSuccess,
@@ -92,8 +105,6 @@ export function CreateMarkerForm({
         : [];
     return items.filter((category) => category.isActive);
   }, [categoriesResponse]);
-
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const form = useForm<CreateMarkerFormSchema>({
     resolver: zodResolver(createMarkerFormSchema),
@@ -117,12 +128,18 @@ export function CreateMarkerForm({
     form.setValue("lng", coords.lng);
   }, [coords.lat, coords.lng, form]);
 
+  /** Atualiza o bairro sugerido pelo geocodificador sem desmontar o formulário. */
   useEffect(() => {
-    return () => {
-      if (photoPreview)
-        URL.revokeObjectURL(photoPreview);
-    };
-  }, [photoPreview]);
+    if (defaultDistrict !== undefined && defaultDistrict.trim().length > 0)
+      form.setValue("bairro", defaultDistrict, { shouldValidate: true });
+  }, [defaultDistrict, form]);
+
+  /** Sincroniza o valor de categoryId caso as categorias sejam carregadas após a inicialização. */
+  useEffect(() => {
+    const currentCategoryId = form.getValues("categoryId");
+    if (!currentCategoryId && categories.length > 0 && categories[0]?.id)
+      form.setValue("categoryId", categories[0].id, { shouldValidate: true });
+  }, [categories, form]);
 
   async function onSubmitForm(data: CreateMarkerFormSchema) {
     const state = await createPlaceAction({
@@ -174,7 +191,7 @@ export function CreateMarkerForm({
             );
           }
         } catch {
-          // O local já foi criado; falha eventual no upload da foto não invalida o cadastro
+          /** O local já foi criado; falha eventual no upload da foto não invalida o cadastro. */
         }
       }
     }
@@ -198,36 +215,16 @@ export function CreateMarkerForm({
           <FormField
             control={form.control}
             name="foto"
-            render={({ field: { value, onChange, ...field } }) => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Foto do local (opcional)</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    type="file"
-                    accept="image/*"
-                    className="h-auto py-1.5"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      onChange(file);
-                      setPhotoPreview(file ? URL.createObjectURL(file) : null);
-                    }}
+                  <FileUploadDropzone
+                    value={field.value}
+                    onChange={field.onChange}
+                    disabled={isSubmitting}
                   />
                 </FormControl>
-
-                {photoPreview ? (
-                  // biome-ignore lint/performance/noImgElement: blob local, next/image não otimiza
-                  <img
-                    src={photoPreview}
-                    alt={`Pré-visualização de ${value?.name ?? "foto"}`}
-                    className="h-28 w-full rounded-md object-cover"
-                  />
-                ) : (
-                  <div className="flex h-28 w-full items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                    <ImageIcon className="size-6" />
-                  </div>
-                )}
-
                 <FormMessage />
               </FormItem>
             )}
@@ -298,7 +295,7 @@ export function CreateMarkerForm({
                       <SelectValue placeholder="Escolha a categoria do local" />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent position="popper" sideOffset={4}>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}

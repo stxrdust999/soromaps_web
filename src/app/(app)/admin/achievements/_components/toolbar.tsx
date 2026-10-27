@@ -18,19 +18,19 @@ import {
 } from "@/components/table/filter-chip";
 import { FilterChipsScrollArea } from "@/components/table/filter-chips-scroll-area";
 import { FilterResetButton } from "@/components/table/filter-reset-button";
-import {
-  ACHIEVEMENT_EVENT_KEYS,
-  ACHIEVEMENT_EVENTS,
-  TRIGGER_LABEL,
-} from "@/constants/achievements";
+import { TRIGGER_LABEL } from "@/constants/achievements";
 import type { AchievementMock } from "@/types/achievements";
 import { hasActiveFilters } from "@/utils/table/has-active-filters";
 
 import { achievementColumnsNames } from "./columns";
 
-const EVENT_OPTIONS: SelectFilterChipOption[] = ACHIEVEMENT_EVENT_KEYS.map(
-  (key) => ({ value: key, label: ACHIEVEMENT_EVENTS[key].label }),
-);
+const EVENT_OPTIONS: SelectFilterChipOption[] = [
+  { value: "visitar", label: "Visitar" },
+  { value: "avaliar", label: "Avaliar" },
+  { value: "favoritar", label: "Favoritar" },
+  { value: "criar", label: "Criar pontos" },
+  { value: "comentar", label: "Comentar" },
+];
 
 const TRIGGER_OPTIONS: SelectFilterChipOption[] = Object.entries(
   TRIGGER_LABEL,

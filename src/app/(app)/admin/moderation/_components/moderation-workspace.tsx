@@ -29,13 +29,14 @@ import { ModerationStats } from "./moderation-stats";
 import { PointReview } from "./point-review";
 import { QueuePanel } from "./queue-panel";
 import { RejectDialog } from "./reject-dialog";
+import { ReturnDialog } from "./return-dialog";
 import {
   mapDtoToItemMock,
   useModerationQueue,
 } from "./use-moderation-queue";
 
 type WorkspaceTab = "fila" | "historico";
-type OpenDialog = "rejeicao" | "duplicata" | null;
+type OpenDialog = "rejeicao" | "duplicata" | "devolucao" | null;
 
 const TABS: { value: WorkspaceTab; label: string }[] = [
   { value: "fila", label: "Fila" },
@@ -147,7 +148,7 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
           break;
         case "d":
           event.preventDefault();
-          runDecision("devolvido", "Devolvido ao autor");
+          if (selected) setDialog("devolucao");
           break;
         case "r":
           event.preventDefault();
@@ -210,7 +211,11 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
           orientation="horizontal"
           className="min-h-0 flex-1 border-t"
         >
-          <ResizablePanel defaultSize="26%" minSize="300px" maxSize="40%">
+          <ResizablePanel
+            defaultSize="28%"
+            minSize="360px"
+            maxSize="45%"
+          >
             <QueuePanel
               items={queue.visible}
               categories={categoryNames}
@@ -236,9 +241,7 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
                   item={selected}
                   author={selected.autor}
                   onApprove={() => runDecision("aprovado", "Ponto aprovado")}
-                  onReturn={() =>
-                    runDecision("devolvido", "Devolvido ao autor")
-                  }
+                  onReturn={() => setDialog("devolucao")}
                   onReject={() => setDialog("rejeicao")}
                   onCompare={() => setDialog("duplicata")}
                 />
@@ -258,6 +261,23 @@ export function ModerationWorkspace({ promises }: ModerationWorkspaceProps) {
         <div className="min-h-0 flex-1 overflow-auto border-t pt-4">
           <HistoryTable initialHistory={initialHistory} />
         </div>
+      )}
+
+      {selected && (
+        <ReturnDialog
+          open={dialog === "devolucao"}
+          onOpenChange={(open) => setDialog(open ? "devolucao" : null)}
+          pointName={selected.nome}
+          onConfirm={(reason, note) => {
+            setDialog(null);
+            runDecision(
+              "devolvido",
+              "Devolvido ao autor",
+              reason,
+              note,
+            );
+          }}
+        />
       )}
 
       {selected && (

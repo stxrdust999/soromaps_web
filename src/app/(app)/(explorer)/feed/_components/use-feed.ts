@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { toggleFavoritePlaceAction } from "@/actions/activity";
 import { createFeedMuteAction, deleteFeedMuteAction } from "@/actions/feed";
@@ -44,14 +44,30 @@ export function feedItemPlace(item: FeedItemMock): FeedPlaceMock | null {
 }
 
 function matchesMute(item: FeedItemMock, mute: FeedMute): boolean {
-  if (mute.scope === "tipo") return item.kind === (mute.value as FeedItemKind);
+  if (mute.scope === "tipo") {
+    if (item.kind === mute.value) return true;
+    const normalizedMuteValue = mute.value.toLowerCase().replace(/[-_]/g, "");
+    const normalizedItemKind = item.kind.toLowerCase().replace(/[-_]/g, "");
+    if (normalizedItemKind === normalizedMuteValue) return true;
+    if (
+      (normalizedMuteValue === "review" && item.kind === "avaliacao") ||
+      (normalizedMuteValue === "newplace" && item.kind === "novo-ponto") ||
+      (normalizedMuteValue === "burst" && item.kind === "movimento") ||
+      (normalizedMuteValue === "achievement" && item.kind === "conquista") ||
+      (normalizedMuteValue === "milestone" && item.kind === "marco") ||
+      (normalizedMuteValue === "curation" && item.kind === "curadoria")
+    ) {
+      return true;
+    }
+    return false;
+  }
 
   const local = feedItemPlace(item);
   if (!local) return false;
 
   return mute.scope === "bairro"
-    ? local.bairro === mute.value
-    : local.categoria === mute.value;
+    ? local.bairro.trim().toLowerCase() === mute.value.trim().toLowerCase()
+    : local.categoria.trim().toLowerCase() === mute.value.trim().toLowerCase();
 }
 
 function minutesOfDay(hora: string): number {
@@ -101,6 +117,15 @@ export function useFeed({ initialItems, initialMutes }: UseFeedOptions) {
   });
   const [visible, setVisible] = useState(PAGE_SIZE);
 
+  const mutesRef = useRef(mutes);
+  useEffect(() => {
+    mutesRef.current = mutes;
+  }, [mutes]);
+
+  const pendingMutesRef = useRef<
+    Map<string, Promise<{ success: boolean; muteId?: string }>>
+  >(new Map());
+
   const audible = useMemo(
     () =>
       initialItems.filter(
@@ -146,8 +171,8 @@ export function useFeed({ initialItems, initialMutes }: UseFeedOptions) {
 
   const mute = useCallback((rule: FeedMute) => {
     const scopeType =
-      rule.scope === "bairro" ? 1 : rule.scope === "categoria" ? 0 : 2;
-    createFeedMuteAction({ scopeType, scopeValue: rule.value });
+      rule.scope === "bairro" ? 0 : rule.scope === "categoria" ? 1 : 2;
+    const ruleKey = `${rule.scope}:${rule.value}`;
 
     setMutes((current) =>
       current.some(
@@ -156,10 +181,43 @@ export function useFeed({ initialItems, initialMutes }: UseFeedOptions) {
         ? current
         : [...current, rule],
     );
+
+    const mutePromise = createFeedMuteAction({
+      scopeType,
+      scopeValue: rule.value,
+    });
+    pendingMutesRef.current.set(ruleKey, mutePromise);
+
+    mutePromise.then((result) => {
+      pendingMutesRef.current.delete(ruleKey);
+      if (result.success && result.muteId) {
+        setMutes((current) =>
+          current.map((item) =>
+            item.scope === rule.scope && item.value === rule.value
+              ? { ...item, apiId: result.muteId }
+              : item,
+          ),
+        );
+      }
+    });
   }, []);
 
   const unmute = useCallback((rule: FeedMute) => {
-    if (rule.apiId) deleteFeedMuteAction(rule.apiId);
+    const ruleKey = `${rule.scope}:${rule.value}`;
+    const pendingPromise = pendingMutesRef.current.get(ruleKey);
+
+    const existingItem = mutesRef.current.find(
+      (item) => item.scope === rule.scope && item.value === rule.value,
+    );
+    const targetApiId = rule.apiId ?? existingItem?.apiId;
+
+    if (targetApiId) deleteFeedMuteAction(targetApiId);
+    else if (pendingPromise) {
+      pendingMutesRef.current.delete(ruleKey);
+      pendingPromise.then((result) => {
+        if (result.success && result.muteId) deleteFeedMuteAction(result.muteId);
+      });
+    }
 
     setMutes((current) =>
       current.filter(

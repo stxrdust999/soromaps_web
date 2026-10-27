@@ -30,6 +30,11 @@ export interface GeminiSchema {
   required?: string[];
 }
 
+export interface StoryPromptInput {
+  tema: string;
+  places: string[];
+}
+
 interface GenerateJsonOptions {
   /** Regras de conduta do modelo — o que ele não pode inventar. */
   system: string;
@@ -51,6 +56,23 @@ export function geminiModelDisplayName(): string {
   const modelId = geminiModel().toLowerCase();
   if (modelId.includes("gemini")) return "Gemini";
   return "IA";
+}
+
+/**
+ * Constrói o prompt editorial para o modelo Gemini, adaptando as instruções conforme a presença ou ausência de locais vinculados.
+ */
+export function buildPrompt(input: StoryPromptInput): string {
+  if (input.places.length > 0) {
+    return `Tema pedido pela redação: ${input.tema}
+
+Escreva a pauta usando apenas os lugares abaixo, nesta ordem.
+
+${input.places.join("\n\n")}`;
+  }
+
+  return `Tema pedido pela redação: ${input.tema}
+
+Redija uma matéria, crônica ou pauta editorial completa sobre Sorocaba focada no tema solicitado, sem inventar nomes de estabelecimentos reais nem tokens de lugar.`;
 }
 
 /**
@@ -103,8 +125,6 @@ export async function generateJson({
     const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (typeof text !== "string") {
-      // Acontece quando o filtro de segurança corta a resposta: vem candidato
-      // sem `parts`, e não erro HTTP.
       return { ok: false, reason: "falha", detail: "Resposta vazia do modelo" };
     }
 

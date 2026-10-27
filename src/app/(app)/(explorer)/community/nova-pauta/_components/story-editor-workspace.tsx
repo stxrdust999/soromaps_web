@@ -22,6 +22,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -30,10 +31,12 @@ import {
   generateStoryDraftAction,
   type PlaceStoryItem,
   searchPlacesForStoryAction,
+  updateStoryAction,
 } from "@/actions/stories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Sparkles } from "@/components/ui/sparkles";
 import {
   Form,
   FormControl,
@@ -46,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import type { StoryDetailDto } from "@/http/api.schemas";
 import { responseToast } from "@/lib/toaster";
 import { cn } from "@/lib/utils";
 import { slugify } from "@/utils/formatters/slugify";
@@ -69,39 +73,124 @@ interface StoryPlaceDraftInput {
 
 interface StoryEditorWorkspaceProps {
   authorName: string;
+  initialStory?: StoryDetailDto | null;
 }
 
 /**
  * Workspace de tela cheia para criação e preview em tempo real de pautas editoriais.
  */
-export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) {
+export function StoryEditorWorkspace({
+  authorName,
+  initialStory,
+}: StoryEditorWorkspaceProps) {
   const router = useRouter();
+  const isEditing = Boolean(initialStory?.id);
 
-  const [modelo, setModelo] = useState<string | null>(null);
+  const [modelo, setModelo] = useState<string | null>(
+    initialStory?.origin === 1 ? "Gemini" : null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PlaceStoryItem[]>([]);
-  const [selectedPlaces, setSelectedPlaces] = useState<PlaceStoryItem[]>([]);
+  const [selectedPlaces, setSelectedPlaces] = useState<PlaceStoryItem[]>(() => {
+    if (!initialStory?.places) return [];
+    return initialStory.places.map((place) => ({
+      id: place.placeId,
+      nome: place.placeName,
+      bairro: place.neighborhood,
+      categoria: place.category.name,
+      nota: 5,
+      avaliacoes: 0,
+      fotoUrl: place.coverPhotoUrl ?? null,
+      sobre: place.bodyText,
+    }));
+  });
   const [isSearching, setIsSearching] = useState(false);
 
   // Campos do formulário editorial
-  const [slug, setSlug] = useState("");
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [introText, setIntroText] = useState("");
-  const [closingText, setClosingText] = useState("");
-  const [placesContent, setPlacesContent] = useState<StoryPlaceDraftInput[]>([]);
+  const [slug, setSlug] = useState(initialStory?.slug ?? "");
+  const [title, setTitle] = useState(initialStory?.title ?? "");
+  const [subtitle, setSubtitle] = useState(initialStory?.subtitle ?? "");
+  const [neighborhood, setNeighborhood] = useState(
+    initialStory?.neighborhood ?? "",
+  );
+  const [introText, setIntroText] = useState(initialStory?.introText ?? "");
+  const [closingText, setClosingText] = useState(
+    initialStory?.closingText ?? "",
+  );
+  const [placesContent, setPlacesContent] = useState<StoryPlaceDraftInput[]>(
+    () => {
+      if (!initialStory?.places) return [];
+      return initialStory.places.map((place) => ({
+        placeId: place.placeId,
+        placeName: place.placeName,
+        categoryName: place.category.name,
+        neighborhood: place.neighborhood,
+        coverPhotoUrl: place.coverPhotoUrl ?? null,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? "",
+      }));
+    },
+  );
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
   const form = useForm<GenerateStorySchema>({
     resolver: zodResolver(generateStorySchema),
-    defaultValues: { tema: "", localIds: [] },
+    defaultValues: {
+      tema: initialStory?.title ?? "",
+      localIds: initialStory?.places.map((place) => place.placeId) ?? [],
+    },
   });
 
   const { isSubmitting: isGenerating } = form.formState;
+  const isAiActive = Boolean(modelo) || isGenerating;
   const selectedIds = form.watch("localIds");
+
+  useEffect(() => {
+    if (!initialStory) return;
+
+    setTitle(initialStory.title);
+    setSlug(initialStory.slug);
+    setSubtitle(initialStory.subtitle);
+    setNeighborhood(initialStory.neighborhood ?? "");
+    setIntroText(initialStory.introText);
+    setClosingText(initialStory.closingText ?? "");
+    setModelo(initialStory.origin === 1 ? "Gemini" : null);
+
+    const nextPlaces: PlaceStoryItem[] = initialStory.places.map((place) => ({
+      id: place.placeId,
+      nome: place.placeName,
+      bairro: place.neighborhood,
+      categoria: place.category.name,
+      nota: 5,
+      avaliacoes: 0,
+      fotoUrl: place.coverPhotoUrl ?? null,
+      sobre: place.bodyText,
+    }));
+    setSelectedPlaces(nextPlaces);
+
+    const nextContent: StoryPlaceDraftInput[] = initialStory.places.map(
+      (place) => ({
+        placeId: place.placeId,
+        placeName: place.placeName,
+        categoryName: place.category.name,
+        neighborhood: place.neighborhood,
+        coverPhotoUrl: place.coverPhotoUrl ?? null,
+        angleTitle: place.angleTitle,
+        bodyText: place.bodyText,
+        localTip: place.localTip ?? "",
+      }),
+    );
+    setPlacesContent(nextContent);
+
+    form.setValue(
+      "localIds",
+      initialStory.places.map((place) => place.placeId),
+    );
+    form.setValue("tema", initialStory.title);
+  }, [initialStory, form]);
 
   const loadPlaces = useCallback(async (query: string) => {
     setIsSearching(true);
@@ -254,7 +343,17 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
     else setIsSavingDraft(true);
 
     try {
-      const response = await createStoryAction({
+      const placesPayload = placesContent.map((place) => ({
+        placeId: place.placeId,
+        angleTitle: place.angleTitle.trim() || `Destaque: ${place.placeName}`,
+        bodyText:
+          place.bodyText.trim().length >= 20
+            ? place.bodyText.trim()
+            : `Espaço especial da comunidade: ${place.placeName}. Local imperdível para conhecer.`,
+        localTip: place.localTip.trim() || null,
+      }));
+
+      const basePayload = {
         slug: generatedSlug,
         title: title.trim(),
         subtitle: subtitle.trim() || title.trim(),
@@ -262,27 +361,26 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
         introText: introText.trim(),
         closingText: closingText.trim() || null,
         publishImmediately,
-        places: placesContent.map((place) => ({
-          placeId: place.placeId,
-          angleTitle: place.angleTitle.trim() || `Destaque: ${place.placeName}`,
-          bodyText:
-            place.bodyText.trim().length >= 20
-              ? place.bodyText.trim()
-              : `Espaço especial da comunidade: ${place.placeName}. Local imperdível para conhecer.`,
-          localTip: place.localTip.trim() || null,
-        })),
-      });
+        places: placesPayload,
+      };
+
+      const response =
+        isEditing && initialStory?.id
+          ? await updateStoryAction({ id: initialStory.id, ...basePayload })
+          : await createStoryAction(basePayload);
 
       if (!response.success) {
         responseToast.error({
-          title: "Erro ao salvar pauta",
+          title: isEditing ? "Erro ao atualizar pauta" : "Erro ao salvar pauta",
           description: response.message,
         });
         return;
       }
 
       responseToast.success({
-        title: publishImmediately ? "Pauta publicada!" : "Rascunho salvo!",
+        title: publishImmediately
+          ? (isEditing ? "Pauta atualizada e publicada!" : "Pauta publicada!")
+          : (isEditing ? "Rascunho atualizado!" : "Rascunho salvo!"),
         description: response.message,
       });
 
@@ -356,9 +454,11 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
           </Button>
           <Separator orientation="vertical" className="h-4" />
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">Criador de Pauta</span>
+            <span className="font-semibold text-sm">
+              {isEditing ? "Editar Pauta" : "Criador de Pauta"}
+            </span>
             <Badge variant="outline" className="text-xs">
-              Preview em Tempo Real
+              {isEditing ? "Edição de Rascunho" : "Preview em Tempo Real"}
             </Badge>
           </div>
         </div>
@@ -385,7 +485,7 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
             {isSavingDraft && (
               <Loader2Icon className="size-4 animate-spin mr-1.5" />
             )}
-            Salvar Rascunho
+            {isEditing ? "Atualizar Rascunho" : "Salvar Rascunho"}
           </Button>
 
           <Button
@@ -404,7 +504,7 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
             ) : (
               <SendIcon className="size-4 mr-1.5" />
             )}
-            Publicar Pauta
+            {isEditing ? "Salvar e Publicar" : "Publicar Pauta"}
           </Button>
         </div>
       </header>
@@ -627,17 +727,28 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
                     Clique para gerar com Gemini ou escreva o texto abaixo.
                   </div>
 
-                  <Button
-                    type="submit"
-                    disabled={isGenerating || selectedIds.length < MIN_PLACES}
-                  >
-                    {isGenerating ? (
-                      <Loader2Icon className="size-4 animate-spin" />
-                    ) : (
-                      <SparklesIcon className="size-4" />
+                  <div className="relative inline-flex items-center">
+                    {isGenerating && (
+                      <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-blue-500 via-indigo-500 to-pink-500 opacity-75 blur-xs animate-pulse" />
                     )}
-                    {title ? "Regerar com IA" : "Gerar com IA"}
-                  </Button>
+                    <Button
+                      type="submit"
+                      disabled={isGenerating || selectedIds.length < MIN_PLACES}
+                      className={cn(
+                        "relative transition-all",
+                        isGenerating && "border-transparent bg-zinc-900 text-white shadow-lg shadow-indigo-500/25 dark:bg-zinc-100 dark:text-zinc-900",
+                      )}
+                    >
+                      {isGenerating ? (
+                        <Sparkles className="mr-2">
+                          <Loader2Icon className="size-4 animate-spin text-primary-foreground" />
+                        </Sparkles>
+                      ) : (
+                        <SparklesIcon className="size-4 mr-1.5" />
+                      )}
+                      {title ? "Regerar com IA" : "Gerar com IA"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </Form>
@@ -820,165 +931,306 @@ export function StoryEditorWorkspace({ authorName }: StoryEditorWorkspaceProps) 
         </div>
 
         {/* right column: live preview */}
-        <div className="hidden lg:flex flex-1 flex-col overflow-y-auto bg-muted/10 p-8">
-          <div className="mx-auto w-full max-w-2xl space-y-6">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <EyeIcon className="size-4 text-primary" />
-                Pré-visualização Fiel da Página
-              </div>
-              <Badge variant="outline" className="text-[11px]">
-                /pautas/{slug || "slug-da-pauta"}
-              </Badge>
-            </div>
+        <div className="relative hidden lg:flex flex-1 flex-col overflow-hidden bg-muted/10">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <motion.div
+              animate={{
+                x: ["-4%", "14%", "-6%", "-4%"],
+                y: ["-2%", "12%", "4%", "-2%"],
+                scale: [1, 1.32, 1.08, 1],
+              }}
+              transition={{
+                duration: 24,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className={cn(
+                "absolute -top-[8%] -left-[6%] h-[42vw] w-[42vw] max-h-[560px] max-w-[560px] rounded-full transition-colors transition-opacity transition-[background-color,opacity,filter] duration-1000",
+                isAiActive
+                  ? "opacity-55 dark:opacity-45 blur-[110px]"
+                  : "opacity-[0.07] dark:opacity-[0.09] blur-[120px]",
+              )}
+              style={{
+                backgroundColor: isAiActive
+                  ? "oklch(0.74 0.16 255)"
+                  : "var(--primary)",
+              }}
+            />
 
-            {/* preview content card */}
-            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              {/* cover banner */}
-              <div className="relative h-60 w-full overflow-hidden bg-muted">
-                <Image
-                  src={previewCoverPhoto}
-                  alt={title || "Capa da pauta"}
-                  fill
-                  sizes="(min-width: 1024px) 680px, 100vw"
-                  priority
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-                <div className="absolute bottom-4 left-4 right-4">
-                  <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/30 text-xs">
-                    {neighborhood || "Sorocaba"}
-                  </Badge>
+            <motion.div
+              animate={{
+                x: ["6%", "-14%", "4%", "6%"],
+                y: ["4%", "-12%", "-4%", "4%"],
+                scale: [1.18, 0.95, 1.28, 1.18],
+              }}
+              transition={{
+                duration: 28,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className={cn(
+                "absolute -bottom-[10%] -right-[6%] h-[40vw] w-[40vw] max-h-[540px] max-w-[540px] rounded-full transition-colors transition-opacity transition-[background-color,opacity,filter] duration-1000",
+                isAiActive
+                  ? "opacity-50 dark:opacity-40 blur-[115px]"
+                  : "opacity-[0.06] dark:opacity-[0.08] blur-[125px]",
+              )}
+              style={{
+                backgroundColor: isAiActive
+                  ? "oklch(0.62 0.24 285)"
+                  : "var(--primary)",
+              }}
+            />
+
+            <motion.div
+              animate={{
+                x: ["0%", "-16%", "8%", "0%"],
+                y: ["6%", "-10%", "12%", "6%"],
+                scale: [1.05, 1.38, 1.1, 1.05],
+              }}
+              transition={{
+                duration: 32,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className={cn(
+                "absolute top-[26%] -right-[4%] h-[36vw] w-[36vw] max-h-[480px] max-w-[480px] rounded-full transition-colors transition-opacity transition-[background-color,opacity,filter] duration-1000",
+                isAiActive
+                  ? "opacity-50 dark:opacity-40 blur-[120px]"
+                  : "opacity-[0.05] dark:opacity-[0.07] blur-[130px]",
+              )}
+              style={{
+                backgroundColor: isAiActive
+                  ? "oklch(0.78 0.18 330)"
+                  : "var(--primary)",
+              }}
+            />
+
+            <motion.div
+              animate={{
+                x: ["-6%", "15%", "-8%", "-6%"],
+                y: ["4%", "-14%", "6%", "4%"],
+                scale: [1, 1.3, 0.96, 1],
+              }}
+              transition={{
+                duration: 36,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className={cn(
+                "absolute bottom-[6%] left-[10%] h-[34vw] w-[34vw] max-h-[460px] max-w-[460px] rounded-full transition-colors transition-opacity transition-[background-color,opacity,filter] duration-1000",
+                isAiActive
+                  ? "opacity-45 dark:opacity-35 blur-[115px]"
+                  : "opacity-[0.06] dark:opacity-[0.08] blur-[125px]",
+              )}
+              style={{
+                backgroundColor: isAiActive
+                  ? "oklch(0.66 0.22 300)"
+                  : "var(--primary)",
+              }}
+            />
+
+            <motion.div
+              animate={{
+                x: ["8%", "-12%", "10%", "8%"],
+                y: ["-8%", "10%", "-4%", "-8%"],
+                scale: [1.1, 0.92, 1.25, 1.1],
+              }}
+              transition={{
+                duration: 30,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className={cn(
+                "absolute top-[42%] left-[18%] h-[32vw] w-[32vw] max-h-[440px] max-w-[440px] rounded-full transition-colors transition-opacity transition-[background-color,opacity,filter] duration-1000",
+                isAiActive
+                  ? "opacity-40 dark:opacity-35 blur-[120px]"
+                  : "opacity-[0.05] dark:opacity-[0.07] blur-[130px]",
+              )}
+              style={{
+                backgroundColor: isAiActive
+                  ? "oklch(0.70 0.20 240)"
+                  : "var(--primary)",
+              }}
+            />
+
+            <div
+              className={cn(
+                "absolute inset-0 transition-opacity duration-1000",
+                isAiActive
+                  ? "opacity-35 dark:opacity-25"
+                  : "opacity-15 dark:opacity-10",
+              )}
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at center, rgba(255, 255, 255, 0.9) 1.25px, transparent 1.35px)",
+                backgroundSize: "22px 22px",
+              }}
+            />
+          </div>
+
+          <div className="relative z-10 flex-1 overflow-y-auto p-8">
+            <div className="mx-auto w-full max-w-2xl space-y-6">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <EyeIcon className="size-4 text-primary" />
+                  Pré-visualização Fiel da Página
                 </div>
+                <Badge variant="outline" className="text-[11px]">
+                  /pautas/{slug || "slug-da-pauta"}
+                </Badge>
               </div>
 
-              {/* article body */}
-              <div className="p-6 space-y-6">
-                <div className="space-y-3">
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                    {title || "Título da pauta aparecerá aqui..."}
-                  </h1>
-
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    {modelo ? (
-                      <Badge variant="outline" className="gap-1">
-                        <SparklesIcon className="size-3" />
-                        Rascunho por {modelo}, revisado por {authorName}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">Por {authorName}</Badge>
-                    )}
-
-                    <Badge variant="ghost">
-                      <ClockIcon className="size-3 mr-1" />
-                      {readingTimeMinutes} min de leitura
+              {/* preview content card */}
+              <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                {/* cover banner */}
+                <div className="relative h-60 w-full overflow-hidden bg-muted">
+                  <Image
+                    src={previewCoverPhoto}
+                    alt={title || "Capa da pauta"}
+                    fill
+                    sizes="(min-width: 1024px) 680px, 100vw"
+                    priority
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/30 text-xs">
+                      {neighborhood || "Sorocaba"}
                     </Badge>
-
-                    <Badge variant="ghost">Hoje</Badge>
                   </div>
                 </div>
 
-                <p className="text-base text-muted-foreground leading-relaxed italic">
-                  {subtitle ||
-                    "O subtítulo ou chamada da pauta aparecerá aqui sintetizando o roteiro..."}
-                </p>
+                {/* article body */}
+                <div className="p-6 space-y-6">
+                  <div className="space-y-3">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                      {title || "Título da pauta aparecerá aqui..."}
+                    </h1>
 
-                <Separator />
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {modelo ? (
+                        <Badge variant="outline" className="gap-1">
+                          <SparklesIcon className="size-3" />
+                          Rascunho por {modelo}, revisado por {authorName}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Por {authorName}</Badge>
+                      )}
 
-                {/* intro */}
-                <div className="space-y-4 text-sm leading-relaxed text-foreground">
-                  <p className="text-pretty">
-                    {introText ||
-                      "A introdução do roteiro aparecerá aqui apresentando a proposta da cidade..."}
+                      <Badge variant="ghost">
+                        <ClockIcon className="size-3 mr-1" />
+                        {readingTimeMinutes} min de leitura
+                      </Badge>
+
+                      <Badge variant="ghost">Hoje</Badge>
+                    </div>
+                  </div>
+
+                  <p className="text-base text-muted-foreground leading-relaxed italic">
+                    {subtitle ||
+                      "O subtítulo ou chamada da pauta aparecerá aqui sintetizando o roteiro..."}
                   </p>
 
-                  {/* places stops */}
-                  {placesContent.map((place, index) => (
-                    <div
-                      key={place.placeId}
-                      className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2 mt-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm text-foreground">
-                          {index + 1}. {place.placeName}
-                        </span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {place.categoryName} · {place.neighborhood}
-                        </Badge>
-                      </div>
+                  <Separator />
 
-                      {place.angleTitle && (
-                        <p className="font-medium text-xs text-primary">
-                          {place.angleTitle}
-                        </p>
-                      )}
-
-                      <p className="text-xs text-pretty leading-relaxed text-muted-foreground">
-                        {place.bodyText || "Detalhes e impressões sobre o local..."}
-                      </p>
-
-                      {place.localTip && (
-                        <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400 text-xs">
-                          <span className="font-medium flex-none">💡 Dica local:</span>
-                          <span>{place.localTip}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* closing */}
-                  {closingText && (
-                    <p className="text-pretty text-muted-foreground pt-2">
-                      {closingText}
+                  {/* intro */}
+                  <div className="space-y-4 text-sm leading-relaxed text-foreground">
+                    <p className="text-pretty">
+                      {introText ||
+                        "A introdução do roteiro aparecerá aqui apresentando a proposta da cidade..."}
                     </p>
+
+                    {/* places stops */}
+                    {placesContent.map((place, index) => (
+                      <div
+                        key={place.placeId}
+                        className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2 mt-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-sm text-foreground">
+                            {index + 1}. {place.placeName}
+                          </span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {place.categoryName} · {place.neighborhood}
+                          </Badge>
+                        </div>
+
+                        {place.angleTitle && (
+                          <p className="font-medium text-xs text-primary">
+                            {place.angleTitle}
+                          </p>
+                        )}
+
+                        <p className="text-xs text-pretty leading-relaxed text-muted-foreground">
+                          {place.bodyText ||
+                            "Detalhes e impressões sobre o local..."}
+                        </p>
+
+                        {place.localTip && (
+                          <div className="flex items-start gap-1.5 rounded-md bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400 text-xs">
+                            <span className="font-medium flex-none">
+                              💡 Dica local:
+                            </span>
+                            <span>{place.localTip}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* closing */}
+                    {closingText && (
+                      <p className="text-pretty text-muted-foreground pt-2">
+                        {closingText}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* places cards summary */}
+                  {selectedPlaces.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t">
+                      <h3 className="font-semibold text-sm">
+                        Lugares desta pauta ({selectedPlaces.length})
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {selectedPlaces.map((place) => (
+                          <Card
+                            key={place.id}
+                            size="sm"
+                            className="border border-border bg-card/60"
+                          >
+                            <CardContent className="flex items-center justify-between gap-3 p-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {place.fotoUrl ? (
+                                  <Image
+                                    src={place.fotoUrl}
+                                    alt={place.nome}
+                                    width={36}
+                                    height={36}
+                                    className="size-9 rounded-md object-cover flex-none"
+                                  />
+                                ) : (
+                                  <div className="flex size-9 flex-none items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                    <MapPinIcon className="size-4" />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <p className="font-medium text-xs truncate">
+                                    {place.nome}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground truncate">
+                                    {place.categoria} · {place.bairro}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <ExternalLinkIcon className="size-3.5 text-muted-foreground flex-none" />
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-
-                {/* places cards summary */}
-                {selectedPlaces.length > 0 && (
-                  <div className="space-y-3 pt-4 border-t">
-                    <h3 className="font-semibold text-sm">
-                      Lugares desta pauta ({selectedPlaces.length})
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {selectedPlaces.map((place) => (
-                        <Card
-                          key={place.id}
-                          size="sm"
-                          className="border border-border bg-card/60"
-                        >
-                          <CardContent className="flex items-center justify-between gap-3 p-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {place.fotoUrl ? (
-                                <Image
-                                  src={place.fotoUrl}
-                                  alt={place.nome}
-                                  width={36}
-                                  height={36}
-                                  className="size-9 rounded-md object-cover flex-none"
-                                />
-                              ) : (
-                                <div className="flex size-9 flex-none items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                  <MapPinIcon className="size-4" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="font-medium text-xs truncate">
-                                  {place.nome}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground truncate">
-                                  {place.categoria} · {place.bairro}
-                                </p>
-                              </div>
-                            </div>
-
-                            <ExternalLinkIcon className="size-3.5 text-muted-foreground flex-none" />
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
