@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import {
@@ -13,6 +14,12 @@ import { HomeFeedSkeleton } from "./_components/home-feed-skeleton";
 import { HomeMapLayers } from "./_components/home-map-layers";
 import { HomeMapSearch } from "./_components/home-map-search";
 import { HomePanelHeader } from "./_components/home-panel-header";
+
+export const metadata: Metadata = {
+  title: "Mapa Interativo",
+  description:
+    "Explore o mapa de Sorocaba e descubra locais autenticados por exploradores.",
+};
 
 interface HomePageProps {
   searchParams?: Promise<{

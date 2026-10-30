@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { placeReviewsTag, placeShowTag } from "@/constants/places";
@@ -9,6 +10,43 @@ import { PlaceDetailSkeleton } from "./_components/place-detail-skeleton";
 
 interface PlaceDetailPageProps {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * Resolves dynamic SEO metadata and OpenGraph properties for a specific place.
+ *
+ * @param props Route parameter container.
+ * @returns Metadata object with place name and description or fallback.
+ */
+export async function generateMetadata({
+  params,
+}: PlaceDetailPageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  try {
+    const response = await getPlaceById(id, {
+      next: { tags: [placeShowTag(id)] },
+    });
+
+    if (response.status === 200)
+      return {
+        title: response.data.name,
+        description: response.data.about || "Detalhes do local em Sorocaba",
+        openGraph: {
+          title: response.data.name,
+          description: response.data.about || "Detalhes do local em Sorocaba",
+          images: response.data.coverPhotoUrl ? [response.data.coverPhotoUrl] : undefined,
+        },
+      };
+
+    return {
+      title: "Local não encontrado",
+    };
+  } catch {
+    return {
+      title: "Local não encontrado",
+    };
+  }
 }
 
 /**

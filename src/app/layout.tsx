@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { getAppUrl } from "@/config/env";
 import { cn } from "@/lib/utils";
 import "@/styles/globals.css";
 
@@ -24,12 +25,45 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Soromaps",
-  description: "Plataforma digital interativa de Sorocaba",
+  metadataBase: new URL(getAppUrl()),
+  title: {
+    default: "Soromaps — Descubra e Avalie Lugares em Sorocaba",
+    template: "%s | Soromaps",
+  },
+  description:
+    "Descubra, avalie e compartilhe experiências autênticas em estabelecimentos e espaços urbanos de Sorocaba.",
+  applicationName: "Soromaps",
+  keywords: [
+    "Sorocaba",
+    "mapa colaborativo",
+    "guia local",
+    "lugares em Sorocaba",
+    "avaliações",
+  ],
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "Soromaps",
+    title: "Soromaps — Descubra e Avalie Lugares em Sorocaba",
+    description:
+      "Descubra, avalie e compartilhe experiências autênticas em estabelecimentos e espaços urbanos de Sorocaba.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Soromaps — Descubra e Avalie Lugares em Sorocaba",
+    description:
+      "Descubra, avalie e compartilhe experiências autênticas em estabelecimentos e espaços urbanos de Sorocaba.",
+  },
+  icons: {
+    icon: [
+      { url: "/logo/logoipsum-emblem.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico" },
+    ],
+  },
 };
 
 /**
- * Layout raiz da aplicação responsável pela injeção de fontes, provedor de temas e notificações globais.
+ * Root application layout establishing font variables, global theme providers, and notification toasts.
  */
 export default function RootLayout({
   children,
@@ -38,7 +72,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="pt"
+      lang="pt-BR"
       suppressHydrationWarning
       className={cn(
         "h-full",
@@ -50,15 +84,6 @@ export default function RootLayout({
         plusJakartaSans.variable,
       )}
     >
-      <head>
-        <link
-          rel="icon"
-          href="/logo/logoipsum-emblem.svg"
-          type="image/svg+xml"
-          sizes="32x32"
-        />
-      </head>
-
       <body className="min-h-full">
         <ThemeProvider
           attribute="class"

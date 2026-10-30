@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
@@ -16,6 +17,52 @@ interface StoryPageProps {
  */
 function isStoryPublished(status: string | number | undefined): boolean {
   return status === 1 || String(status).toLowerCase() === "published";
+}
+
+/**
+ * Resolves dynamic SEO metadata and social graph tags for published editorial stories.
+ *
+ * @param props Route parameter container.
+ * @returns Metadata object with story title and article payload or indexation guard.
+ */
+export async function generateMetadata({
+  params,
+}: StoryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug).trim();
+
+  try {
+    const response = await getStoryBySlug(decodedSlug, {
+      next: { tags: [storyShowTag(decodedSlug)] },
+    });
+
+    if (response.status === 200 && isStoryPublished(response.data.status))
+      return {
+        title: response.data.title,
+        description: response.data.subtitle,
+        openGraph: {
+          type: "article",
+          title: response.data.title,
+          description: response.data.subtitle,
+        },
+      };
+
+    return {
+      title: "Pauta",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  } catch {
+    return {
+      title: "Pauta",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { type ReactNode, Suspense } from "react";
 
 import {
@@ -13,6 +14,14 @@ import { getSession } from "@/lib/session";
 
 import { ProfileHeaderContent } from "./_components/profile-header-content";
 import { ProfileHeaderSkeleton } from "./_components/profile-header-skeleton";
+
+export const metadata: Metadata = {
+  title: "Meu Perfil",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 /**
  * Layout da área privada do perfil do explorador com streaming de Promises.

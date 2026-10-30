@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import {
@@ -12,6 +13,12 @@ import { listStories } from "@/http/stories/stories";
 import { getSession } from "@/lib/session";
 import { CommunitySkeleton } from "./_components/community-skeleton";
 import { CommunityWorkspace } from "./_components/community-workspace";
+
+export const metadata: Metadata = {
+  title: "Comunidade de Exploradores",
+  description:
+    "Conheça quem explora e avalia a cidade, rankings e pautas da redação.",
+};
 
 /**
  * Página da Comunidade integrada à API via Streaming SSR.

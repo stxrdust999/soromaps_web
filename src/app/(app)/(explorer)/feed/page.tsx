@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { MY_STATS_TAG } from "@/constants/achievements";
@@ -14,6 +15,12 @@ import { listPlaces } from "@/http/places/places";
 import { getSession } from "@/lib/session";
 import { FeedSkeleton } from "./_components/feed-skeleton";
 import { FeedWorkspace } from "./_components/feed-workspace";
+
+export const metadata: Metadata = {
+  title: "Feed da Cidade",
+  description:
+    "Acompanhe as últimas avaliações, recomendações e novidades de Sorocaba.",
+};
 
 /**
  * Página do Feed integrada à API via Streaming SSR.
