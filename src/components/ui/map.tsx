@@ -1,8 +1,12 @@
 "use client";
 
 import * as MapLibreGL from "maplibre-gl";
-import type { MarkerOptions, PopupOptions } from "maplibre-gl";
+import { setWorkerUrl, type MarkerOptions, type PopupOptions } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+if (typeof window !== "undefined") {
+  setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+}
 import { Loader2, Locate, Maximize, Minus, Plus, X } from "lucide-react";
 import {
   createContext,
@@ -294,9 +298,14 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       onViewportChangeRef.current?.(getViewport(map));
     };
 
+    const errorHandler = (e: MapLibreGL.ErrorEvent) => {
+      console.error("MapLibre error:", e.error);
+    };
+
     map.on("load", loadHandler);
     map.on("styledata", styleDataHandler);
     map.on("move", handleMove);
+    map.on("error", errorHandler);
     setMapInstance(map);
 
     return () => {
@@ -304,6 +313,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
       map.off("move", handleMove);
+      map.off("error", errorHandler);
       map.remove();
       setIsLoaded(false);
       setIsStyleLoaded(false);
