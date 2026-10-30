@@ -1,6 +1,7 @@
 import { updateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { getEnv } from "@/config/env";
 import { FEED_LIST_TAG, STORIES_LIST_TAG } from "@/constants/reports";
 import type { PlaceSummaryDto } from "@/http/api.schemas";
 import { listPlaces } from "@/http/places/places";
@@ -38,7 +39,9 @@ const DRAFT_SCHEMA: GeminiSchema = {
  * Validates request authorization against the configured secret key.
  */
 function isValidCronRequest(request: NextRequest): boolean {
-  const cronSecret = process.env.CRON_SECRET ?? "soromaps-cron-secret-2026";
+  const { CRON_SECRET: cronSecret } = getEnv();
+  if (!cronSecret) return false;
+
   const authHeader = request.headers.get("authorization");
   const cronKeyHeader = request.headers.get("x-cron-key");
 
@@ -199,14 +202,14 @@ ${factsText}`;
     };
   });
 
-  const cronSecret = process.env.CRON_SECRET ?? "soromaps-cron-secret-2026";
+  const { CRON_SECRET: cronSecret } = getEnv();
   const apiResponse = await http<HttpResponse<{ id?: string; slug?: string }>>(
     "/api/stories/cron-sync",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Cron-Key": cronSecret,
+        ...(cronSecret ? { "X-Cron-Key": cronSecret } : {}),
       },
       body: JSON.stringify({
         slug: storySlug,
