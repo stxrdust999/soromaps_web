@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getApiUrl } from "@/config/env";
 import { decodeJwtClaims } from "@/lib/session";
 import type { SessionUser } from "@/types/session";
 
@@ -50,7 +51,7 @@ export async function middleware(request: NextRequest) {
   /** Performs transparent token refresh when access token is expired but refresh token exists. */
   if (isAccessTokenExpired && refreshToken) {
     try {
-      const apiUrl = process.env.API_URL ?? "http://localhost:5099";
+      const apiUrl = getApiUrl();
       const refreshResponse = await fetch(`${apiUrl}/api/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getApiUrl } from "@/config/env";
 import { getAccessToken } from "@/lib/session";
 
 /**
@@ -10,7 +11,7 @@ async function proxyRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
   const { path } = await context.params;
-  const apiUrl = process.env.API_URL ?? "http://localhost:5099";
+  const apiUrl = getApiUrl();
 
   const targetPath = path.join("/");
   const searchParams = request.nextUrl.search;

@@ -1,3 +1,5 @@
+import { getEnv } from "@/config/env";
+
 /**
  * Cliente mínimo da API do Gemini.
  *
@@ -46,7 +48,8 @@ interface GenerateJsonOptions {
 }
 
 export function geminiModel(): string {
-  return process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+  const { GEMINI_MODEL } = getEnv();
+  return GEMINI_MODEL || DEFAULT_MODEL;
 }
 
 /**
@@ -87,7 +90,7 @@ export async function generateJson({
   schema,
   temperature = 0.4,
 }: GenerateJsonOptions): Promise<GeminiResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const { GEMINI_API_KEY: apiKey } = getEnv();
 
   if (!apiKey) return { ok: false, reason: "sem-chave" };
 
